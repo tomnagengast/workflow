@@ -13,12 +13,15 @@ distributed as a single compiled binary via a Homebrew tap.
 - `src/version.ts` — version source of truth (`--define`-injectable at build).
 - `src/types.ts` — shared type skeleton, grown as features land.
 - `src/cli/` — arg parsing (frozen `parseOptions`), help text, terminal
-  rendering, and `commands/{list,show,run}` (more land in later phases).
+  rendering, and `commands/{list,show,run,validate,doctor}` (more land in later
+  phases). `validate`/`doctor` are read-only diagnostics (not in the frozen
+  `--help` USAGE, which mirrors the monolith).
 - `src/discovery/` — `catalog` (workflow dirs + git repo root + shadowing) and
   `resolve` (`NAME_RE` + `requireWorkflow`).
 - `src/loader/` — `meta` (extract + vm-eval the `meta` literal), `validate`
-  (size / meta-first / banned-token heuristic; real AST in Phase 6), and the
-  frozen `transform` (export-strip + async-IIFE wrap).
+  (size / meta-first / banned-construct check via a real acorn AST walk — the
+  one runtime dependency; parses with return/await tolerance to model the
+  async-IIFE wrap), and the frozen `transform` (export-strip + async-IIFE wrap).
 - `src/runtime/` — the execution heart: `runner` (WorkflowRunner: agent / gate /
   parallel / pipeline / nested workflow / budget), `sandbox` (vm bag + run),
   `concurrency` (Semaphore + defaultConcurrency), `budget`, and the frozen

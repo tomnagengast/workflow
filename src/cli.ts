@@ -13,6 +13,8 @@ import { parseArgv } from "./cli/args.ts";
 import { list } from "./cli/commands/list.ts";
 import { show } from "./cli/commands/show.ts";
 import { run } from "./cli/commands/run.ts";
+import { validate } from "./cli/commands/validate.ts";
+import { doctor } from "./cli/commands/doctor.ts";
 import { usage } from "./cli/help.ts";
 import { catalog } from "./discovery/catalog.ts";
 import { version } from "./version.ts";
@@ -43,6 +45,14 @@ async function main(): Promise<number> {
 
   if (root.command === "run") {
     return run(catalog(cwd), cwd, root.args);
+  }
+
+  if (root.command === "validate") {
+    return validate(catalog(cwd), root.args);
+  }
+
+  if (root.command === "doctor") {
+    return doctor(cwd, root.args);
   }
 
   throw new Error(`Unknown command: ${root.command}`);
