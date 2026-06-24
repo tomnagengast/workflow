@@ -9,9 +9,7 @@ started.
 | [getting-started.md](getting-started.md) | Your first successful `list` and `run`. |
 | [usage.md](usage.md) | Command and option reference. |
 | [config.md](config.md) | Layered config (`flags > user > defaults`) and the user TOML file. |
+| [release.md](release.md) | Maintainer release pipeline: targets, signing, the tag-driven workflow, secrets, fix-forward. |
 
 Agents working in this repo start at [`../AGENTS.md`](../AGENTS.md) and the
 [agent docs index](agents/README.md).
-
-These guides are stubs during the rewrite and are filled in as the matching
-features land. A `release.md` is added with the release pipeline.

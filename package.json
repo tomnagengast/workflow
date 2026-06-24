@@ -12,6 +12,8 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build": "bun run scripts/build.ts",
+    "release:dry-run": "bun run scripts/release/dry-run.ts",
+    "release:formula": "bun run scripts/release/render-formula.ts",
     "context:check": "bun run dev/agent/context-check"
   },
   "devDependencies": {

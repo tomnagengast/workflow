@@ -1,0 +1,141 @@
+name: release
+
+# Cut a release when a semver tag is pushed. Cross-compiles all four single-file
+# targets from one macOS host, ad-hoc codesigns the darwin artifacts and runs
+# the Gatekeeper launch test, publishes a GitHub Release with checksums, then
+# renders Formula/workflow.rb and pushes it to the Homebrew tap.
+#
+# Signing tier for 1.0: ad-hoc (`codesign --sign -`) — no paid Developer ID
+# cert, ships now (plan Q3 default). The darwin-x64 target is the baseline
+# (`bun-darwin-x64-baseline`) for pre-2013 Intel-Mac safety. See docs/release.md.
+#
+# Human-gated knobs this workflow assumes exist before a real run:
+#   - secrets.HOMEBREW_TAP_TOKEN: a PAT with push access to
+#     tomnagengast/homebrew-workflow (the tap repo).
+# The build + release jobs need no secrets; only publish-formula does.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  # Build, sign, and Gatekeeper-launch-test all four targets on one macOS host
+  # (cross-compile), then collect artifacts + checksums for the release job.
+  build:
+    name: build 4 targets + sign darwin
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: install deps
+        run: bun install --frozen-lockfile
+
+      - name: version matches tag
+        # The released binary must print the tag's version. The build injects
+        # package.json's version via --define; assert they agree before building.
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(bun -e 'console.log(require("./package.json").version)')"
+          echo "tag=$tag pkg=$pkg"
+          test "$tag" = "$pkg" || {
+            echo "::error::tag v$tag != package.json version $pkg (bump CHANGELOG + version before tagging)"
+            exit 1
+          }
+
+      - name: build + sign + launch dry-run (all 4 targets)
+        # Reuses the same dry-run the PR gate runs: build 4 targets, ad-hoc sign
+        # the darwin artifacts, codesign -dv, launch the host-native one and
+        # assert NOT exit 137. On macos-14 (arm64) that exercises the
+        # darwin-arm64 Gatekeeper launch for real.
+        env:
+          WORKFLOW_DRYRUN_DIR: dist/release
+        run: bun run release:dry-run
+
+      - name: checksums
+        run: |
+          cd dist/release
+          shasum -a 256 workflow-* | tee checksums.txt
+          shasum -a 256 workflow-* > SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-binaries
+          path: |
+            dist/release/workflow-*
+            dist/release/checksums.txt
+            dist/release/SHA256SUMS
+          if-no-files-found: error
+
+  # Publish the GitHub Release with the four binaries + checksums.
+  release:
+    name: github release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-binaries
+          path: dist/release
+      - name: create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Automated release. See CHANGELOG.md for details." \
+            dist/release/workflow-darwin-arm64 \
+            dist/release/workflow-darwin-x64 \
+            dist/release/workflow-linux-x64 \
+            dist/release/workflow-linux-arm64 \
+            dist/release/SHA256SUMS
+
+  # Render the formula from the published assets' checksums and push it to the
+  # tap. This is the only job that needs the tap PAT — everything upstream is
+  # secret-free, so a tap-push failure can be fixed forward without re-releasing
+  # (see docs/release.md "partial publish").
+  publish-formula:
+    name: render + push formula to tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-binaries
+          path: dist/release
+      - name: render formula
+        run: |
+          bun run release:formula \
+            --version "$GITHUB_REF_NAME" \
+            --checksums dist/release/checksums.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --out /tmp/workflow.rb
+          cat /tmp/workflow.rb
+      - name: push to homebrew tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN not set — cannot push formula to tap"
+            exit 1
+          fi
+          tap_dir="$(mktemp -d)"
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/tomnagengast/homebrew-workflow.git" "$tap_dir"
+          mkdir -p "$tap_dir/Formula"
+          cp /tmp/workflow.rb "$tap_dir/Formula/workflow.rb"
+          cd "$tap_dir"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/workflow.rb
+          git commit -m "workflow ${GITHUB_REF_NAME}"
+          git push origin HEAD:main

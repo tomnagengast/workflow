@@ -31,3 +31,11 @@ All notable changes to this project are documented here. The format follows
   append mode), locked by a golden-bytes test. `--resume` replays a prior
   journal's non-null results from cache without re-dispatching. Shape parity vs
   the legacy runner is self-generated and asserted.
+- Homebrew release pipeline (`.github/workflows/release.yml`): a `v*.*.*` tag
+  cross-compiles four single-file binaries (`darwin-arm64`, Intel-baseline
+  `darwin-x64`, `linux-x64`, `linux-arm64`) from one host, ad-hoc codesigns the
+  darwin artifacts, publishes a GitHub Release with checksums, and renders +
+  pushes a multi-platform `Formula/workflow.rb` to the tap. The pre-publish
+  signing / Gatekeeper launch test (`bun run release:dry-run`) runs on every PR
+  (`release-dry-run` CI job) so a SIGKILL (exit 137) or broken cross-compile is
+  caught without cutting a release. Maintainer guide: `docs/release.md`.
