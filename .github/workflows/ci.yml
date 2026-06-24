@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Phase 1 lands the `vm-compile` smoke job — THE GATE. It continuously
+# validates the load-bearing assumption: `node:vm` works inside a
+# `bun build --compile --bytecode` binary. Later phases extend this workflow
+# with the rest of the CI floor (typecheck, bun test, CLI --help/--version
+# smoke, packaging build, context:check, 4-target build/sign/launch).
+jobs:
+  vm-compile:
+    name: vm-compile smoke (the gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: compile + run the vm spike (--bytecode)
+        run: |
+          bun build --compile --bytecode --outfile /tmp/wf-spike test/spike/vm-compile.ts
+          out="$(/tmp/wf-spike)"
+          echo "spike output: $out"
+          test "$out" = "dispatched:alpha+dispatched:beta"
