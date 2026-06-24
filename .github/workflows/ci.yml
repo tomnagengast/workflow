@@ -7,9 +7,10 @@ on:
 
 # Phase 1 lands the `vm-compile` smoke job — THE GATE. It continuously
 # validates the load-bearing assumption: `node:vm` works inside a
-# `bun build --compile --bytecode` binary. Later phases extend this workflow
-# with the rest of the CI floor (typecheck, bun test, CLI --help/--version
-# smoke, packaging build, context:check, 4-target build/sign/launch).
+# `bun build --compile --bytecode` binary. Phase 2 adds the `checks` job
+# (typecheck + bun test + CLI smoke + list/show JSON-shape parity). Later
+# phases extend with packaging build, context:check, and 4-target
+# build/sign/launch.
 jobs:
   vm-compile:
     name: vm-compile smoke (the gate)
@@ -25,3 +26,26 @@ jobs:
           out="$(/tmp/wf-spike)"
           echo "spike output: $out"
           test "$out" = "dispatched:alpha+dispatched:beta"
+
+  checks:
+    name: typecheck + tests + cli smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: install deps
+        run: bun install --frozen-lockfile
+      - name: typecheck
+        run: bun run typecheck
+      - name: test
+        # Covers the list/show discovery slice incl. the `list --json` raw-meta
+        # shape parity (test/integration/list-show.test.ts) — the committable,
+        # monolith-free stand-in for the live-monolith diff (Phase 5 adds the
+        # characterization snapshots).
+        run: bun test
+      - name: cli smoke (--help / --version)
+        run: |
+          bun run src/cli.ts --version
+          bun run src/cli.ts --help | grep -q "Usage: workflow"

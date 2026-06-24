@@ -13,3 +13,7 @@ All notable changes to this project are documented here. The format follows
   `docs/agents/`, `dev/agent/` wrappers, `context:check`), and starter docs.
 - `workflow --version` / `-v` — prints the version (genuinely missing from the
   legacy runner).
+- `workflow list` / `workflow show <name>` — real read-only discovery against
+  `~/.claude/workflows` + project `.claude/workflows`, with scope shadowing and
+  meta-first parsing. `--json` carries the raw, un-flattened `meta` verbatim,
+  byte-identical to the legacy runner.

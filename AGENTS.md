@@ -12,6 +12,12 @@ distributed as a single compiled binary via a Homebrew tap.
 - `src/cli.ts` — CLI entrypoint and command dispatch. Load-bearing rule below.
 - `src/version.ts` — version source of truth (`--define`-injectable at build).
 - `src/types.ts` — shared type skeleton, grown as features land.
+- `src/cli/` — arg parsing (frozen `parseOptions`), help text, terminal
+  rendering, and `commands/{list,show}` (more land in later phases).
+- `src/discovery/` — `catalog` (workflow dirs + git repo root + shadowing) and
+  `resolve` (`NAME_RE` + `requireWorkflow`).
+- `src/loader/` — `meta` (extract + vm-eval the `meta` literal) and `validate`
+  (size / meta-first / banned-token heuristic; real AST in Phase 6).
 - `scripts/` — build / release tooling (`bun build --compile`).
 - `test/` — `bun:test` unit, integration, characterization, compat suites.
 - `dev/agent/` — stable non-interactive wrappers agents and CI both run.
