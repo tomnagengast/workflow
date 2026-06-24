@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Broader validation for landing / release-sensitive surfaces:
+# check-fast plus a compile smoke that the binary builds and prints --version.
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+
+dev/agent/check-fast
+
+echo "[check-full] build smoke"
+out="$(mktemp -d)"
+trap 'rm -rf "$out"' EXIT
+bun build --compile --outfile "$out/workflow" src/cli.ts
+"$out/workflow" --version
+
+echo "[check-full] ok"

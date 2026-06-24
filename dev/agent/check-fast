@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Fastest meaningful check for normal edits: typecheck + tests.
+# Non-interactive, no watch mode, exits non-zero on the first failure.
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+
+echo "[check-fast] typecheck"
+bun run typecheck
+
+echo "[check-fast] test"
+# Bun exits non-zero when zero test files exist. Until the first suite lands
+# (Phase 3), treat "no tests yet" as a pass; run for real once any test file
+# exists so this stays meaningful.
+if find test -type f \( -name '*.test.ts' -o -name '*.test.js' -o -name '*.spec.ts' \) -print -quit 2>/dev/null | grep -q .; then
+  bun test
+else
+  echo "[check-fast] no test files yet — skipping"
+fi
+
+echo "[check-fast] ok"

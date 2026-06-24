@@ -1,0 +1,21 @@
+{
+  "name": "workflow",
+  "version": "0.0.0",
+  "description": "Standalone runner for Claude Code dynamic workflow scripts.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "workflow": "./src/cli.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/cli.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build": "bun run scripts/build.ts",
+    "context:check": "bun run dev/agent/context-check"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}
