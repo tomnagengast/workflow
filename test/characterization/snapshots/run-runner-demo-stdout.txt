@@ -1,0 +1,21 @@
+exit: 0
+--- stdout ---
+{
+  "fan": [
+    "fake-claude: alpha task",
+    "fake-claude: beta task"
+  ],
+  "fanNulls": 1,
+  "piped": [
+    "fake-claude: stage-2 one: fake-claude: stage-1 one",
+    "fake-claude: stage-2 two: fake-claude: stage-1 two"
+  ],
+  "verdictApproved": true,
+  "nested": {
+    "leaf": "fake-claude: leaf task: from-runner-demo",
+    "gotArgs": {
+      "note": "from-runner-demo"
+    }
+  },
+  "spent": 49
+}

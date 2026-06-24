@@ -1,0 +1,30 @@
+exit: 0
+--- stdout ---
+{
+  "name": "alpha",
+  "path": "<HOME>/.claude/workflows/alpha.js",
+  "scope": "user",
+  "description": "First fixture workflow with collapsed whitespace.",
+  "phases": [
+    "Plan",
+    "Build"
+  ],
+  "mutating": false,
+  "meta": {
+    "name": "alpha",
+    "description": "First   fixture   workflow with   collapsed whitespace.",
+    "phases": [
+      {
+        "title": "Plan"
+      },
+      {
+        "title": "Build"
+      }
+    ],
+    "author": "fixture",
+    "tags": [
+      "a",
+      "b"
+    ]
+  }
+}

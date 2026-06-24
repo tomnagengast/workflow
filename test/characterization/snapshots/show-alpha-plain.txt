@@ -1,0 +1,8 @@
+exit: 0
+--- stdout ---
+name: alpha
+scope: user
+path: <HOME>/.claude/workflows/alpha.js
+mutating: false
+phases: Plan, Build
+description: First fixture workflow with collapsed whitespace.

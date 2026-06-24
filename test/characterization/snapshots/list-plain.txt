@@ -1,0 +1,12 @@
+exit: 0
+--- stdout ---
+• alpha
+  user  ·  Plan → Build
+  First fixture workflow with collapsed whitespace.
+
+• beta  mutating 
+  user  ·  Scan → Report
+  Second fixture; phases given as bare strings.
+
+• nometa
+  user
