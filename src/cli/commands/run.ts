@@ -15,9 +15,9 @@ import type { Catalog, Runtime } from "../../types.ts";
 import { parseOptions } from "../args.ts";
 import { requireWorkflow } from "../../discovery/resolve.ts";
 import { BACKENDS } from "../../backends/index.ts";
-import { defaultConcurrency } from "../../runtime/concurrency.ts";
 import { loadResume } from "../../journal/resume.ts";
 import { WorkflowRunner } from "../../runtime/runner.ts";
+import { resolveConfig } from "../../config/config.ts";
 
 const DEFAULT_SCHEMA_RETRIES = 2;
 
@@ -39,7 +39,12 @@ export async function run(workflows: Catalog, cwd: string, args: string[]): Prom
   if (workflow.mutating && !opts.allowMutating) {
     throw new Error(`Refusing to run mutating workflow '${workflow.name}' without --allow-mutating.`);
   }
-  const backend = (opts.backend as string) || "claude";
+  // Defaults layer (Phase 7): the resolved user config sits UNDER flags. With
+  // no config file, `cfg` equals the monolith's hardcoded defaults, so every
+  // `?? cfg.x` below reduces to the old literal — byte-compat preserved.
+  const { config: cfg } = resolveConfig();
+
+  const backend = (opts.backend as string) || cfg.backend;
   if (!BACKENDS[backend]) throw new Error(`Unknown backend '${backend}' (expected: claude | codex)`);
 
   const concurrency = opts.concurrency as number;
@@ -48,16 +53,16 @@ export async function run(workflows: Catalog, cwd: string, args: string[]): Prom
   const runtime: Runtime = {
     cwd,
     backend,
-    claudeBin: (opts.claudeBin as string) || "claude",
+    claudeBin: (opts.claudeBin as string) || cfg.claudeBin,
     claudeArgs: (opts.claudeArg as string[]) || [],
     claudeYolo: Boolean(opts.claudeYolo),
-    codexBin: (opts.codexBin as string) || "codex",
+    codexBin: (opts.codexBin as string) || cfg.codexBin,
     codexArgs: (opts.codexArg as string[]) || [],
     codexYolo: Boolean(opts.codexYolo),
     sandbox: opts.sandbox as string | undefined,
-    model: opts.model as string | undefined,
-    concurrency: Number.isFinite(concurrency) && concurrency > 0 ? concurrency : defaultConcurrency(),
-    budget: Number.isFinite(budget) && budget > 0 ? budget : null,
+    model: (opts.model as string | undefined) ?? cfg.model,
+    concurrency: Number.isFinite(concurrency) && concurrency > 0 ? concurrency : cfg.concurrency,
+    budget: Number.isFinite(budget) && budget > 0 ? budget : cfg.budget,
     schemaRetries: Number.isFinite(schemaRetries) && schemaRetries >= 0 ? schemaRetries : DEFAULT_SCHEMA_RETRIES,
     journalPath: opts.journal ? path.resolve(opts.journal as string) : null,
     resumeCache: loadResume(opts.resume ? path.resolve(opts.resume as string) : null),
