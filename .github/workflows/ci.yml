@@ -49,3 +49,15 @@ jobs:
         run: |
           bun run src/cli.ts --version
           bun run src/cli.ts --help | grep -q "Usage: workflow"
+      - name: compiled run smoke (vm runtime in the --bytecode binary)
+        # Continuously validates the full runtime — agent / gate / parallel /
+        # pipeline / nested workflow() inside a node:vm sandbox — survives
+        # `bun build --compile --bytecode` against the fake backend bins. Proves
+        # no top-level await leaked onto the runtime load path.
+        run: |
+          bun run build --outfile /tmp/wf-run
+          /tmp/wf-run --cwd "$PWD/test/fixtures/run-home" run runner-demo \
+            --claude-bin "$PWD/test/fixtures/fake-claude.mjs" \
+            --codex-bin "$PWD/test/fixtures/fake-codex.mjs" > /tmp/run.out
+          grep -q '"verdictApproved": true' /tmp/run.out
+          grep -q '"spent": 49' /tmp/run.out

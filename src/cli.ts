@@ -12,6 +12,7 @@
 import { parseArgv } from "./cli/args.ts";
 import { list } from "./cli/commands/list.ts";
 import { show } from "./cli/commands/show.ts";
+import { run } from "./cli/commands/run.ts";
 import { usage } from "./cli/help.ts";
 import { catalog } from "./discovery/catalog.ts";
 import { version } from "./version.ts";
@@ -41,8 +42,7 @@ async function main(): Promise<number> {
   }
 
   if (root.command === "run") {
-    // Runtime lands in Phase 3.
-    throw new Error(`Command 'run' is not implemented yet.`);
+    return run(catalog(cwd), cwd, root.args);
   }
 
   throw new Error(`Unknown command: ${root.command}`);

@@ -13,11 +13,20 @@ distributed as a single compiled binary via a Homebrew tap.
 - `src/version.ts` — version source of truth (`--define`-injectable at build).
 - `src/types.ts` — shared type skeleton, grown as features land.
 - `src/cli/` — arg parsing (frozen `parseOptions`), help text, terminal
-  rendering, and `commands/{list,show}` (more land in later phases).
+  rendering, and `commands/{list,show,run}` (more land in later phases).
 - `src/discovery/` — `catalog` (workflow dirs + git repo root + shadowing) and
   `resolve` (`NAME_RE` + `requireWorkflow`).
-- `src/loader/` — `meta` (extract + vm-eval the `meta` literal) and `validate`
-  (size / meta-first / banned-token heuristic; real AST in Phase 6).
+- `src/loader/` — `meta` (extract + vm-eval the `meta` literal), `validate`
+  (size / meta-first / banned-token heuristic; real AST in Phase 6), and the
+  frozen `transform` (export-strip + async-IIFE wrap).
+- `src/runtime/` — the execution heart: `runner` (WorkflowRunner: agent / gate /
+  parallel / pipeline / nested workflow / budget), `sandbox` (vm bag + run),
+  `concurrency` (Semaphore + defaultConcurrency), `budget`, and the frozen
+  `agentKey` (`v2:` hash) + `prompts` (prompt builders + `GATE_SCHEMA`).
+- `src/backends/` — `claude` / `codex` agent backends, `spawn` (never-reject
+  child process), and the `BACKENDS` registry + read-only PATH preflight.
+- `src/schema/` — `tryParseJson` + `schemaOk` (structured-output helpers).
+- `src/journal/` — `resume` (replay non-null results; writer lands Phase 4).
 - `scripts/` — build / release tooling (`bun build --compile`).
 - `test/` — `bun:test` unit, integration, characterization, compat suites.
 - `dev/agent/` — stable non-interactive wrappers agents and CI both run.

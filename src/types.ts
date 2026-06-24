@@ -34,3 +34,37 @@ export interface WorkflowRow {
 
 /** The discovered catalog: workflow name -> row, later scopes shadowing earlier. */
 export type Catalog = Map<string, WorkflowRow>;
+
+/** Resolved run-time configuration, assembled by `cli/commands/run.ts` from the
+ * parsed options. Mirrors the monolith's `runtime` object (`run` branch,
+ * ~755-774) field-for-field so backend / runner behavior stays identical. */
+export interface Runtime {
+  cwd: string;
+  backend: string;
+  claudeBin: string;
+  claudeArgs: string[];
+  claudeYolo: boolean;
+  codexBin: string;
+  codexArgs: string[];
+  codexYolo: boolean;
+  sandbox: string | undefined;
+  model: string | undefined;
+  concurrency: number;
+  budget: number | null;
+  schemaRetries: number;
+  journalPath: string | null;
+  resumeCache: Map<string, unknown>;
+  noValidate: boolean;
+  verbose: boolean;
+  vmTimeoutMs: number;
+}
+
+/** A backend's return envelope: the agent's value (text or schema-parsed object)
+ * plus the token count to charge against the budget. */
+export interface BackendResult {
+  value: unknown;
+  tokens: number;
+}
+
+/** A backend implementation: frame -> { value, tokens }. */
+export type Backend = (prompt: string, schema: unknown, rt: Runtime) => Promise<BackendResult>;
