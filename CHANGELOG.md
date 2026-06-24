@@ -26,3 +26,8 @@ All notable changes to this project are documented here. The format follows
   export-strip/async-IIFE transform, the `parseOptions` table) are locked by
   golden tests. `gate()` always runs on the opposite backend and is always
   injected into the sandbox (top-level and nested).
+- `workflow run --journal <file>` / `--resume <file>` — the started/result jsonl
+  writer is now a frozen `journal/journal.ts` module (byte-identical event shapes,
+  append mode), locked by a golden-bytes test. `--resume` replays a prior
+  journal's non-null results from cache without re-dispatching. Shape parity vs
+  the legacy runner is self-generated and asserted.

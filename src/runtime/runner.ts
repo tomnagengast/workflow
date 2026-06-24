@@ -12,8 +12,8 @@
 //     for that item (BudgetError re-thrown).
 //   - workflow(): nested dispatch, sharing this run's sem/budget/cache/journal.
 //   - cache: resume cache pre-seeded; a cache hit short-circuits dispatch.
-//   - journal: append-mode jsonl; FROZEN `started`/`result` event shapes (the
-//     shape golden test lands in Phase 4, but the writer here already emits it).
+//   - journal: append-mode jsonl; FROZEN `started`/`result` event shapes,
+//     extracted into journal/journal.ts (Journal) with a byte-shape golden test.
 //   - the entrypoint is async-wrapped; NO top-level await anywhere on this path.
 //
 // agentKey, the prompt framing, the transform, the sandbox bag, the Semaphore,
@@ -32,8 +32,7 @@ import { Semaphore } from "./concurrency.ts";
 import { BudgetError, makeBudget } from "./budget.ts";
 import { buildSandboxBag, runInSandbox } from "./sandbox.ts";
 import { buildAgentPrompt, buildGatePrompt, GATE_SCHEMA, opposite } from "./prompts.ts";
-
-type JournalEvent = Record<string, unknown>;
+import { Journal, type JournalEvent } from "../journal/journal.ts";
 
 export class WorkflowRunner {
   cwd: string;
@@ -43,7 +42,7 @@ export class WorkflowRunner {
   sem: Semaphore;
   spent: number;
   cache: Map<string, unknown>;
-  journalStream: fs.WriteStream | null;
+  journalStream: Journal;
 
   constructor({ cwd, workflows, runtime }: { cwd: string; workflows: Catalog; runtime: Runtime }) {
     this.cwd = cwd;
@@ -53,11 +52,11 @@ export class WorkflowRunner {
     this.sem = new Semaphore(runtime.concurrency);
     this.spent = 0;
     this.cache = runtime.resumeCache || new Map();
-    this.journalStream = runtime.journalPath ? fs.createWriteStream(runtime.journalPath, { flags: "a" }) : null;
+    this.journalStream = new Journal(runtime.journalPath);
   }
 
   journal(event: JournalEvent): void {
-    if (this.journalStream) this.journalStream.write(JSON.stringify(event) + "\n");
+    this.journalStream.write(event);
   }
 
   makeBudget() {
@@ -90,7 +89,7 @@ export class WorkflowRunner {
     try {
       return await runInSandbox(wrapped, bag, workflow.path, this.runtime.vmTimeoutMs);
     } finally {
-      if (this.journalStream) this.journalStream.end();
+      this.journalStream.end();
     }
   }
 

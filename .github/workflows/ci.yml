@@ -58,6 +58,18 @@ jobs:
           bun run build --outfile /tmp/wf-run
           /tmp/wf-run --cwd "$PWD/test/fixtures/run-home" run runner-demo \
             --claude-bin "$PWD/test/fixtures/fake-claude.mjs" \
-            --codex-bin "$PWD/test/fixtures/fake-codex.mjs" > /tmp/run.out
+            --codex-bin "$PWD/test/fixtures/fake-codex.mjs" \
+            --journal /tmp/run.jsonl > /tmp/run.out
           grep -q '"verdictApproved": true' /tmp/run.out
           grep -q '"spent": 49' /tmp/run.out
+          # frozen journal writer survives --bytecode: 16 started/result lines
+          test "$(wc -l < /tmp/run.jsonl)" -eq 16
+          grep -q '"type":"started"' /tmp/run.jsonl
+          grep -q '"type":"result"' /tmp/run.jsonl
+          # --resume replays from the journal cache (no fresh dispatch -> spent 0)
+          /tmp/wf-run --cwd "$PWD/test/fixtures/run-home" run runner-demo \
+            --claude-bin "$PWD/test/fixtures/fake-claude.mjs" \
+            --codex-bin "$PWD/test/fixtures/fake-codex.mjs" \
+            --resume /tmp/run.jsonl > /tmp/resume.out
+          grep -q '"verdictApproved": true' /tmp/resume.out
+          grep -q '"spent": 0' /tmp/resume.out

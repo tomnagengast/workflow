@@ -26,7 +26,8 @@ distributed as a single compiled binary via a Homebrew tap.
 - `src/backends/` — `claude` / `codex` agent backends, `spawn` (never-reject
   child process), and the `BACKENDS` registry + read-only PATH preflight.
 - `src/schema/` — `tryParseJson` + `schemaOk` (structured-output helpers).
-- `src/journal/` — `resume` (replay non-null results; writer lands Phase 4).
+- `src/journal/` — `journal` (FROZEN append-mode jsonl `started`/`result`
+  writer) + `resume` (replay non-null results into the resume cache).
 - `scripts/` — build / release tooling (`bun build --compile`).
 - `test/` — `bun:test` unit, integration, characterization, compat suites.
 - `dev/agent/` — stable non-interactive wrappers agents and CI both run.
