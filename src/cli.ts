@@ -13,6 +13,7 @@ import { parseArgv } from "./cli/args.ts";
 import { list } from "./cli/commands/list.ts";
 import { show } from "./cli/commands/show.ts";
 import { run } from "./cli/commands/run.ts";
+import { resume } from "./cli/commands/resume.ts";
 import { validate } from "./cli/commands/validate.ts";
 import { doctor } from "./cli/commands/doctor.ts";
 import { config } from "./cli/commands/config.ts";
@@ -46,6 +47,10 @@ async function main(): Promise<number> {
 
   if (root.command === "run") {
     return run(catalog(cwd), cwd, root.args);
+  }
+
+  if (root.command === "resume") {
+    return resume(catalog(cwd), cwd, root.args);
   }
 
   if (root.command === "validate") {

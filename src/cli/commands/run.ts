@@ -12,10 +12,11 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Catalog, Runtime } from "../../types.ts";
-import { parseOptions } from "../args.ts";
+import { parseOptions, type ParsedOptions } from "../args.ts";
 import { requireWorkflow } from "../../discovery/resolve.ts";
 import { BACKENDS } from "../../backends/index.ts";
 import { loadResume } from "../../journal/resume.ts";
+import { newJournalPath, lastJournalPath } from "../../journal/store.ts";
 import { WorkflowRunner } from "../../runtime/runner.ts";
 import { resolveConfig } from "../../config/config.ts";
 
@@ -27,6 +28,16 @@ function loadArgs(raw: string | undefined): unknown {
   if (raw === undefined) return undefined;
   const text = raw.startsWith("@") ? readFileSync(path.resolve(raw.slice(1)), "utf8") : raw;
   return JSON.parse(text);
+}
+
+/** Resolve which journal file to replay for resume. Precedence: an explicit
+ * `--resume FILE` (absolutized, exactly as the monolith did) wins; otherwise
+ * `--resume-last` resolves the newest auto-journal in the state dir; otherwise
+ * no resume (null). */
+function resolveResumeFile(opts: ParsedOptions): string | null {
+  if (opts.resume) return path.resolve(opts.resume as string);
+  if (opts.resumeLast) return lastJournalPath();
+  return null;
 }
 
 export async function run(workflows: Catalog, cwd: string, args: string[]): Promise<number> {
@@ -64,8 +75,16 @@ export async function run(workflows: Catalog, cwd: string, args: string[]): Prom
     concurrency: Number.isFinite(concurrency) && concurrency > 0 ? concurrency : cfg.concurrency,
     budget: Number.isFinite(budget) && budget > 0 ? budget : cfg.budget,
     schemaRetries: Number.isFinite(schemaRetries) && schemaRetries >= 0 ? schemaRetries : DEFAULT_SCHEMA_RETRIES,
-    journalPath: opts.journal ? path.resolve(opts.journal as string) : null,
-    resumeCache: loadResume(opts.resume ? path.resolve(opts.resume as string) : null),
+    // Auto-journal (Phase 8): with no explicit `--journal`, every run still
+    // journals — to a fresh per-run file in the state dir (~/.local/state/
+    // workflow/). The bytes are the FROZEN `started`/`result` shapes (same
+    // `Journal` writer), so an auto-journal and a manual `--journal` file are
+    // interchangeable. An explicit `--journal FILE` still wins verbatim.
+    journalPath: opts.journal ? path.resolve(opts.journal as string) : newJournalPath(workflow.name),
+    // Resume cache: explicit `--resume FILE` wins; otherwise `--resume-last`
+    // replays the newest auto-journal in the state dir (byte-compatible with
+    // manual `--journal` files via the same `loadResume`).
+    resumeCache: loadResume(resolveResumeFile(opts)),
     noValidate: Boolean(opts.noValidate),
     verbose: Boolean(opts.verbose),
     vmTimeoutMs: 24 * 60 * 60 * 1000,

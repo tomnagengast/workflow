@@ -89,7 +89,14 @@ export class WorkflowRunner {
     try {
       return await runInSandbox(wrapped, bag, workflow.path, this.runtime.vmTimeoutMs);
     } finally {
-      this.journalStream.end();
+      // Await the flush before the run resolves. The monolith called this fire-
+      // and-forget, which is fine when the journal is a side-channel a long-lived
+      // process drains lazily — but here the CLI `process.exit()`s the instant
+      // `run()` returns, so an un-awaited async flush truncates the file. The
+      // FROZEN bytes are unchanged; we only guarantee they reach disk (Phase 8
+      // makes this load-bearing: the auto-journal a later `--resume-last` reads
+      // must be complete).
+      await this.journalStream.end();
     }
   }
 

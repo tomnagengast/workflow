@@ -30,7 +30,8 @@ distributed as a single compiled binary via a Homebrew tap.
   child process), and the `BACKENDS` registry + read-only PATH preflight.
 - `src/schema/` — `tryParseJson` + `schemaOk` (structured-output helpers).
 - `src/journal/` — `journal` (FROZEN append-mode jsonl `started`/`result`
-  writer) + `resume` (replay non-null results into the resume cache).
+  writer) + `resume` (replay non-null results into the resume cache) + `store`
+  (default-on auto-journal under the state dir; resolves "last" by newest mtime).
 - `scripts/` — build / release tooling (`bun build --compile`).
 - `test/` — `bun:test` unit, integration, characterization, compat suites.
 - `dev/agent/` — stable non-interactive wrappers agents and CI both run.
