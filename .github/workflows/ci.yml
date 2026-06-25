@@ -1,0 +1,109 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Phase 1 lands the `vm-compile` smoke job — THE GATE. It continuously
+# validates the load-bearing assumption: `node:vm` works inside a
+# `bun build --compile --bytecode` binary. Phase 2 adds the `checks` job
+# (typecheck + bun test + CLI smoke + list/show JSON-shape parity). Phase 9
+# adds `context:check` to `checks` and the `release-dry-run` job — the
+# pre-publish signing / Gatekeeper rung that builds all 4 targets, ad-hoc signs
+# the darwin artifact, and launch-tests it (assert NOT exit 137) WITHOUT
+# publishing. Only the tap push stays release-gated (.github/workflows/release.yml).
+jobs:
+  vm-compile:
+    name: vm-compile smoke (the gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: compile + run the vm spike (--bytecode)
+        run: |
+          bun build --compile --bytecode --outfile /tmp/wf-spike test/spike/vm-compile.ts
+          out="$(/tmp/wf-spike)"
+          echo "spike output: $out"
+          test "$out" = "dispatched:alpha+dispatched:beta"
+
+  checks:
+    name: typecheck + tests + cli smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: install deps
+        run: bun install --frozen-lockfile
+      - name: typecheck
+        run: bun run typecheck
+      - name: test
+        # Covers the list/show discovery slice incl. the `list --json` raw-meta
+        # shape parity (test/integration/list-show.test.ts) — the committable,
+        # monolith-free stand-in for the live-monolith diff (Phase 5 adds the
+        # characterization snapshots).
+        run: bun test
+      - name: context:check (agent-doc drift)
+        run: bun run context:check
+      - name: cli smoke (--help / --version)
+        run: |
+          bun run src/cli.ts --version
+          bun run src/cli.ts --help | grep -q "Usage: workflow"
+      - name: compiled run smoke (vm runtime in the --bytecode binary)
+        # Continuously validates the full runtime — agent / gate / parallel /
+        # pipeline / nested workflow() inside a node:vm sandbox — survives
+        # `bun build --compile --bytecode` against the fake backend bins. Proves
+        # no top-level await leaked onto the runtime load path.
+        run: |
+          bun run build --outfile /tmp/wf-run
+          /tmp/wf-run --cwd "$PWD/test/fixtures/run-home" run runner-demo \
+            --claude-bin "$PWD/test/fixtures/fake-claude.mjs" \
+            --codex-bin "$PWD/test/fixtures/fake-codex.mjs" \
+            --journal /tmp/run.jsonl > /tmp/run.out
+          grep -q '"verdictApproved": true' /tmp/run.out
+          grep -q '"spent": 49' /tmp/run.out
+          # frozen journal writer survives --bytecode: 16 started/result lines
+          test "$(wc -l < /tmp/run.jsonl)" -eq 16
+          grep -q '"type":"started"' /tmp/run.jsonl
+          grep -q '"type":"result"' /tmp/run.jsonl
+          # --resume replays from the journal cache (no fresh dispatch -> spent 0)
+          /tmp/wf-run --cwd "$PWD/test/fixtures/run-home" run runner-demo \
+            --claude-bin "$PWD/test/fixtures/fake-claude.mjs" \
+            --codex-bin "$PWD/test/fixtures/fake-codex.mjs" \
+            --resume /tmp/run.jsonl > /tmp/resume.out
+          grep -q '"verdictApproved": true' /tmp/resume.out
+          grep -q '"spent": 0' /tmp/resume.out
+
+  release-dry-run:
+    name: release dry-run (build 4 + sign darwin + Gatekeeper launch)
+    # The pre-publish signing rung on every PR: surfaces a Gatekeeper SIGKILL
+    # (exit 137) or a broken cross-compile before a real release ever cuts.
+    # Runs on macos-14 (arm64) so it ad-hoc signs AND natively launch-tests the
+    # darwin-arm64 artifact. NOTHING is published here.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: install deps
+        run: bun install --frozen-lockfile
+      - name: build 4 targets + sign + launch (no publish)
+        run: bun run release:dry-run
+      - name: render formula from dry-run checksums (smoke)
+        # Proves the render path end-to-end against real artifact checksums,
+        # without touching the tap. Asserts a plausible Ruby formula falls out.
+        run: |
+          ( cd dist/release-dryrun && shasum -a 256 workflow-* > checksums.txt )
+          bun run release:formula \
+            --version v0.0.0-ci \
+            --checksums dist/release-dryrun/checksums.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --out /tmp/workflow.rb
+          grep -q 'class Workflow < Formula' /tmp/workflow.rb
+          grep -q 'on_macos do' /tmp/workflow.rb
+          grep -q 'on_linux do' /tmp/workflow.rb

@@ -1,0 +1,5 @@
+exit: 1
+--- stdout ---
+
+--- stderr ---
+Refusing to run mutating workflow 'mutator' without --allow-mutating.

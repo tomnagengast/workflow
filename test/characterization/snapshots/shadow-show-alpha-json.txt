@@ -1,0 +1,19 @@
+exit: 0
+--- stdout ---
+{
+  "name": "alpha",
+  "path": "<CWD>/.claude/workflows/alpha.js",
+  "scope": "project",
+  "description": "Project-scope alpha shadows the user-scope one.",
+  "phases": [
+    "Override"
+  ],
+  "mutating": false,
+  "meta": {
+    "name": "alpha",
+    "description": "Project-scope alpha shadows the user-scope one.",
+    "phases": [
+      "Override"
+    ]
+  }
+}

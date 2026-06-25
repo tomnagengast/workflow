@@ -1,0 +1,21 @@
+exit: 0
+--- stdout ---
+{
+  "name": "beta",
+  "path": "<HOME>/.claude/workflows/beta.js",
+  "scope": "user",
+  "description": "Second fixture; phases given as bare strings.",
+  "phases": [
+    "Scan",
+    "Report"
+  ],
+  "mutating": true,
+  "meta": {
+    "name": "beta",
+    "description": "Second fixture; phases given as bare strings.",
+    "phases": [
+      "Scan",
+      "Report"
+    ]
+  }
+}

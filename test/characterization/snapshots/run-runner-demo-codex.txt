@@ -1,0 +1,21 @@
+exit: 0
+--- stdout ---
+{
+  "fan": [
+    "fake-codex: alpha task",
+    "fake-codex: beta task"
+  ],
+  "fanNulls": 1,
+  "piped": [
+    "fake-codex: stage-2 one: fake-codex: stage-1 one",
+    "fake-codex: stage-2 two: fake-codex: stage-1 two"
+  ],
+  "verdictApproved": true,
+  "nested": {
+    "leaf": "fake-codex: leaf task: from-runner-demo",
+    "gotArgs": {
+      "note": "from-runner-demo"
+    }
+  },
+  "spent": 7
+}

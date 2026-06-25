@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Report any dev processes this repo might have started, so an agent does not
+# spawn a duplicate. This CLI is a short-lived process with no long-running dev
+# server, so the report is intentionally minimal. Always exits 0.
+set -uo pipefail
+cd "$(dirname "$0")/../.."
+
+echo "[dev-status] no long-running dev server for this CLI."
+echo "[dev-status] matching 'bun .*workflow' processes:"
+pgrep -fal 'bun .*workflow' 2>/dev/null || echo "  (none)"
+exit 0

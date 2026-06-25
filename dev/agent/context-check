@@ -1,0 +1,63 @@
+#!/usr/bin/env bun
+// Agent-doc drift check. Fails (exit 1) when the agent-readiness surface named in
+// AGENTS.md has drifted out of existence: the wrapper scripts, the docs index,
+// and the CLAUDE.md -> AGENTS.md shim. Cheap, deterministic, run in CI.
+
+import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
+import { resolve } from "node:path";
+
+const root = resolve(import.meta.dir, "..", "..");
+const problems: string[] = [];
+
+// Files/wrappers that must exist for the documented golden path to work.
+const required = [
+  "AGENTS.md",
+  "CLAUDE.md",
+  "README.md",
+  "docs/agents/README.md",
+  "docs/README.md",
+  "docs/install.md",
+  "docs/getting-started.md",
+  "docs/usage.md",
+  "docs/release.md",
+  "dev/agent/check-fast",
+  "dev/agent/check-full",
+  "dev/agent/dev-status",
+  "dev/agent/context-check",
+  "src/cli.ts",
+  "src/version.ts",
+];
+
+for (const rel of required) {
+  if (!existsSync(resolve(root, rel))) problems.push(`missing: ${rel}`);
+}
+
+// CLAUDE.md must point at AGENTS.md (symlink or shim referencing it).
+const claudePath = resolve(root, "CLAUDE.md");
+if (existsSync(claudePath)) {
+  const stat = lstatSync(claudePath);
+  if (stat.isSymbolicLink()) {
+    if (readlinkSync(claudePath) !== "AGENTS.md") {
+      problems.push("CLAUDE.md symlink does not point to AGENTS.md");
+    }
+  } else if (!readFileSync(claudePath, "utf8").includes("AGENTS.md")) {
+    problems.push("CLAUDE.md does not reference AGENTS.md");
+  }
+}
+
+// Every dev/agent wrapper that AGENTS.md names must actually exist.
+const agents = readFileSync(resolve(root, "AGENTS.md"), "utf8");
+for (const m of agents.matchAll(/dev\/agent\/[a-z-]+/g)) {
+  const rel = m[0];
+  if (!existsSync(resolve(root, rel))) {
+    problems.push(`AGENTS.md references ${rel}, which does not exist`);
+  }
+}
+
+if (problems.length > 0) {
+  console.error("[context:check] agent-doc drift detected:");
+  for (const p of problems) console.error(`  - ${p}`);
+  process.exit(1);
+}
+
+console.log("[context:check] ok");

@@ -1,0 +1,28 @@
+exit: 0
+--- stdout ---
+Usage: workflow [--cwd DIR] <command> [options]
+
+Commands:
+  list [--json]                         List resolved workflows
+  show <name> [--json]                  Show workflow metadata
+  run <name> [--args JSON|@file]        Run a workflow against real subagents
+
+Run options:
+  --backend claude|codex                Agent backend (default: claude)
+  --allow-mutating                      Allow workflows whose meta is marked MUTATING
+  --concurrency N                       Max concurrent agent() calls (default: min(16,max(2,cores-2)))
+  --budget N                            Token budget for budget.total (default: unlimited)
+  --model MODEL                         Model passed to the backend
+  --schema-retries N                    Retries when an agent reply fails its schema (default: 2)
+  --journal FILE                        Write a started/result journal (jsonl)
+  --resume FILE                         Replay cached agent() results from a prior journal
+  --no-validate                         Skip the loader validation (size / meta / banned tokens)
+  --verbose                             Stream backend logs to stderr
+
+  claude backend:  --claude-bin PATH  --claude-arg ARG (repeatable)  --claude-yolo
+  codex backend:   --codex-bin PATH   --codex-arg ARG (repeatable)   --codex-yolo  --sandbox MODE
+
+Examples:
+  workflow list
+  workflow run adversarial-pr-gate --args '{"diff":"git diff HEAD~1 HEAD"}'
+  workflow run plan-review-panel --backend codex --args @args.json

@@ -1,0 +1,64 @@
+exit: 0
+--- stdout ---
+[
+  {
+    "name": "alpha",
+    "path": "<HOME>/.claude/workflows/alpha.js",
+    "scope": "user",
+    "description": "First fixture workflow with collapsed whitespace.",
+    "phases": [
+      "Plan",
+      "Build"
+    ],
+    "mutating": false,
+    "meta": {
+      "name": "alpha",
+      "description": "First   fixture   workflow with   collapsed whitespace.",
+      "phases": [
+        {
+          "title": "Plan"
+        },
+        {
+          "title": "Build"
+        }
+      ],
+      "author": "fixture",
+      "tags": [
+        "a",
+        "b"
+      ]
+    }
+  },
+  {
+    "name": "beta",
+    "path": "<HOME>/.claude/workflows/beta.js",
+    "scope": "user",
+    "description": "Second fixture; phases given as bare strings.",
+    "phases": [
+      "Scan",
+      "Report"
+    ],
+    "mutating": true,
+    "meta": {
+      "name": "beta",
+      "description": "Second fixture; phases given as bare strings.",
+      "phases": [
+        "Scan",
+        "Report"
+      ]
+    }
+  },
+  {
+    "name": "nometa",
+    "path": "<HOME>/.claude/workflows/nometa.js",
+    "scope": "user",
+    "description": "",
+    "phases": [],
+    "mutating": false,
+    "meta": {
+      "name": "nometa",
+      "description": "",
+      "phases": []
+    }
+  }
+]
