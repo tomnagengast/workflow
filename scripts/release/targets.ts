@@ -53,7 +53,22 @@ export const RELEASE_TARGETS: ReleaseTarget[] = [
   },
 ];
 
-/** Released asset name for a target at a given version. */
+/** Released asset name for a target (raw-binary form, used by the PR dry-run). */
 export function assetName(key: string): string {
   return `workflow-${key}`;
+}
+
+/** Homebrew/GoReleaser-style arch token: x64 -> amd64, arm64 -> arm64. */
+export function assetArch(arch: ReleaseTarget["arch"]): "amd64" | "arm64" {
+  return arch === "x64" ? "amd64" : "arm64";
+}
+
+/**
+ * Released tarball name for a target at a given version, matching the
+ * tomnagengast Homebrew family convention: `workflow_<version>_<os>_<arch>.tar.gz`
+ * (arch as amd64/arm64). Each tarball holds a single `workflow` binary.
+ */
+export function tarballName(target: ReleaseTarget, version: string): string {
+  const bare = version.replace(/^v/, "");
+  return `workflow_${bare}_${target.os}_${assetArch(target.arch)}.tar.gz`;
 }

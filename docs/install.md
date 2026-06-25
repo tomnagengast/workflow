@@ -6,20 +6,21 @@ Intel) and Linux (x64 and arm64), distributed through a Homebrew tap.
 ## Prerequisites
 
 - A `claude` and/or `codex` CLI on your `PATH` — these are the runtime backends
-  `workflow` drives. They are **not** bundled or installed by the formula.
+  `workflow` drives. They are **not** bundled or installed by the cask.
   `workflow doctor` reports which backends it can find.
 - For from-source runs only: [Bun](https://bun.sh).
 
 ## Homebrew
 
 ```
-brew tap tomnagengast/workflow
-brew install workflow
+brew tap tomnagengast/tap
+brew install --cask workflow-cli
 ```
 
-The formula is multi-platform: one tap covers macOS and Linux, arm64 and x64.
-The Intel-Mac build uses Bun's baseline target, so it runs on pre-2013 CPUs
-without an illegal-instruction crash.
+`workflow-cli` lives in the shared `tomnagengast/homebrew-tap`, alongside the
+sibling tools. The cask is multi-platform: macOS and Linux, arm64 and x64. The
+Intel-Mac build uses Bun's baseline target, so it runs on pre-2013 CPUs without
+an illegal-instruction crash.
 
 ## From source
 

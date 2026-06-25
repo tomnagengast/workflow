@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "build": "bun run scripts/build.ts",
     "release:dry-run": "bun run scripts/release/dry-run.ts",
-    "release:formula": "bun run scripts/release/render-formula.ts",
+    "release:package": "bun run scripts/release/package.ts",
+    "release:cask": "bun run scripts/release/render-cask.ts",
     "context:check": "bun run dev/agent/context-check"
   },
   "devDependencies": {

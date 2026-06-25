@@ -1,18 +1,17 @@
 name: release
 
-# Cut a release when a semver tag is pushed. Cross-compiles all four single-file
-# targets from one macOS host, ad-hoc codesigns the darwin artifacts and runs
-# the Gatekeeper launch test, publishes a GitHub Release with checksums, then
-# renders Formula/workflow.rb and pushes it to the Homebrew tap.
+# Cut a release when a semver tag is pushed. One macOS host cross-compiles all
+# four single-file targets, ad-hoc codesigns the darwin artifacts and runs the
+# Gatekeeper launch test, packages them as `workflow_<ver>_<os>_<arch>.tar.gz`,
+# publishes a GitHub Release with checksums, then renders the `workflow-cli`
+# cask and pushes it to the shared Homebrew tap — matching the sibling tools
+# (scout-cli, memoryd-cli, ...). See docs/release.md.
 #
-# Signing tier for 1.0: ad-hoc (`codesign --sign -`) — no paid Developer ID
-# cert, ships now (plan Q3 default). The darwin-x64 target is the baseline
-# (`bun-darwin-x64-baseline`) for pre-2013 Intel-Mac safety. See docs/release.md.
-#
-# Human-gated knobs this workflow assumes exist before a real run:
-#   - secrets.HOMEBREW_TAP_TOKEN: a PAT with push access to
-#     tomnagengast/homebrew-workflow (the tap repo).
-# The build + release jobs need no secrets; only publish-formula does.
+# Human-gated knob this workflow assumes for a fully automated run:
+#   - secrets.HOMEBREW_TAP_GITHUB_TOKEN: a PAT with push access to
+#     tomnagengast/homebrew-tap. Without it, publish-cask renders the cask and
+#     SKIPS the push (green) so it can be pushed manually. The build + release
+#     jobs need no secrets.
 
 on:
   push:
@@ -22,10 +21,10 @@ permissions:
   contents: write
 
 jobs:
-  # Build, sign, and Gatekeeper-launch-test all four targets on one macOS host
-  # (cross-compile), then collect artifacts + checksums for the release job.
+  # Cross-compile + sign + launch-test + package all four targets on one macOS
+  # host, then collect tarballs + checksums for the release job.
   build:
-    name: build 4 targets + sign darwin
+    name: build + package 4 tarballs
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -36,8 +35,8 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: version matches tag
-        # The released binary must print the tag's version. The build injects
-        # package.json's version via --define; assert they agree before building.
+        # The released binary must print the tag's version (the build injects
+        # package.json's version via --define). Assert they agree before building.
         run: |
           tag="${GITHUB_REF_NAME#v}"
           pkg="$(bun -e 'console.log(require("./package.json").version)')"
@@ -47,61 +46,50 @@ jobs:
             exit 1
           }
 
-      - name: build + sign + launch dry-run (all 4 targets)
-        # Reuses the same dry-run the PR gate runs: build 4 targets, ad-hoc sign
-        # the darwin artifacts, codesign -dv, launch the host-native one and
-        # assert NOT exit 137. On macos-14 (arm64) that exercises the
-        # darwin-arm64 Gatekeeper launch for real.
-        env:
-          WORKFLOW_DRYRUN_DIR: dist/release
-        run: bun run release:dry-run
-
-      - name: checksums
-        run: |
-          cd dist/release
-          shasum -a 256 workflow-* | tee checksums.txt
-          shasum -a 256 workflow-* > SHA256SUMS
+      - name: build + sign + package (4 tarballs + checksums)
+        run: bun run release:package
 
       - uses: actions/upload-artifact@v4
         with:
-          name: release-binaries
+          name: release-tarballs
           path: |
-            dist/release/workflow-*
+            dist/release/workflow_*.tar.gz
             dist/release/checksums.txt
             dist/release/SHA256SUMS
           if-no-files-found: error
 
-  # Publish the GitHub Release with the four binaries + checksums.
+  # Publish the GitHub Release with the four tarballs + checksums. Idempotent:
+  # if the release already exists (e.g. published from a maintainer machine), the
+  # assets are left untouched so their checksums keep matching the cask.
   release:
     name: github release
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: release-binaries
+          name: release-tarballs
           path: dist/release
-      - name: create release
+      - name: create release (idempotent)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$GITHUB_REF_NAME" \
-            --notes "Automated release. See CHANGELOG.md for details." \
-            dist/release/workflow-darwin-arm64 \
-            dist/release/workflow-darwin-x64 \
-            dist/release/workflow-linux-x64 \
-            dist/release/workflow-linux-arm64 \
-            dist/release/SHA256SUMS
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists — leaving assets as published"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$GITHUB_REF_NAME" \
+              --notes "Automated release. See CHANGELOG.md for details." \
+              dist/release/workflow_*.tar.gz \
+              dist/release/SHA256SUMS
+          fi
 
-  # Render the formula from the published assets' checksums and push it to the
-  # tap. This is the only job that needs the tap PAT — everything upstream is
-  # secret-free, so a tap-push failure can be fixed forward without re-releasing
-  # (see docs/release.md "partial publish").
-  publish-formula:
-    name: render + push formula to tap
+  # Render the cask from the published assets' checksums and push it to the
+  # shared tap. The only job that needs the tap PAT; without it the cask is still
+  # rendered and the push is skipped (green) so it can be done by hand.
+  publish-cask:
+    name: render + push cask to homebrew-tap
     needs: release
     runs-on: ubuntu-latest
     steps:
@@ -111,31 +99,31 @@ jobs:
           bun-version: latest
       - uses: actions/download-artifact@v4
         with:
-          name: release-binaries
+          name: release-tarballs
           path: dist/release
-      - name: render formula
+      - name: render cask
         run: |
-          bun run release:formula \
+          bun run release:cask \
             --version "$GITHUB_REF_NAME" \
             --checksums dist/release/checksums.txt \
             --repo "$GITHUB_REPOSITORY" \
-            --out /tmp/workflow.rb
-          cat /tmp/workflow.rb
-      - name: push to homebrew tap
+            --out /tmp/workflow-cli.rb
+          cat /tmp/workflow-cli.rb
+      - name: push to homebrew-tap (or skip without token)
         env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
         run: |
           if [ -z "${TAP_TOKEN:-}" ]; then
-            echo "::error::HOMEBREW_TAP_TOKEN not set — cannot push formula to tap"
-            exit 1
+            echo "::warning::HOMEBREW_TAP_GITHUB_TOKEN not set — cask rendered but not pushed. Copy it into tomnagengast/homebrew-tap Casks/workflow-cli.rb manually."
+            exit 0
           fi
           tap_dir="$(mktemp -d)"
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/tomnagengast/homebrew-workflow.git" "$tap_dir"
-          mkdir -p "$tap_dir/Formula"
-          cp /tmp/workflow.rb "$tap_dir/Formula/workflow.rb"
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/tomnagengast/homebrew-tap.git" "$tap_dir"
+          mkdir -p "$tap_dir/Casks"
+          cp /tmp/workflow-cli.rb "$tap_dir/Casks/workflow-cli.rb"
           cd "$tap_dir"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/workflow.rb
-          git commit -m "workflow ${GITHUB_REF_NAME}"
+          git add Casks/workflow-cli.rb
+          git diff --cached --quiet || git commit -m "workflow-cli ${GITHUB_REF_NAME}"
           git push origin HEAD:main

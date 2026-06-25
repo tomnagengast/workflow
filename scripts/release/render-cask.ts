@@ -1,18 +1,18 @@
-// Render Formula/workflow.rb from scripts/release/formula.tmpl.
+// Render the Homebrew cask `workflow-cli.rb` from scripts/release/cask.tmpl.
 //
 // Inputs (flags): a single --version, a --checksums file (one
-// `<sha256>  <asset-name>` line per target, as produced by `sha256sum`), and a
-// --repo (owner/name) used to build the GitHub Release download URLs. Output is
-// written to --out (default Formula/workflow.rb).
+// `<sha256>  <asset-name>` line per target, as produced by `shasum -a 256`), and
+// a --repo (owner/name) used to build the GitHub Release download URLs. Output is
+// written to --out (default Casks/workflow-cli.rb).
 //
 // The release workflow runs this as its final job, then commits the rendered
-// formula into the tomnagengast/homebrew-workflow tap. Keeping it a small,
-// pure, testable script (no ruby/erb toolchain) holds the dependency surface
-// at zero — it only reads the template + a checksums manifest.
+// cask into tomnagengast/homebrew-tap (the shared tap, Casks/ dir) — matching the
+// sibling tools (scout-cli, memoryd-cli, ...). A small, pure, testable script
+// (no ruby/erb toolchain) holds the dependency surface at zero.
 //
 // HARD CONSTRAINT: no top-level await — work runs inside main().
 
-import { RELEASE_TARGETS, assetName } from "./targets.ts";
+import { RELEASE_TARGETS, tarballName, assetArch } from "./targets.ts";
 
 interface Options {
   version: string;
@@ -25,7 +25,7 @@ interface Options {
 function requireValue(argv: string[], i: number, flag: string): string {
   const value = argv[i];
   if (value === undefined) {
-    console.error(`[render-formula] missing value for ${flag}`);
+    console.error(`[render-cask] missing value for ${flag}`);
     process.exit(1);
   }
   return value;
@@ -36,8 +36,8 @@ function parseArgs(argv: string[]): Options {
     version: "",
     checksums: "",
     repo: "tomnagengast/workflow",
-    out: "Formula/workflow.rb",
-    template: new URL("./formula.tmpl", import.meta.url).pathname,
+    out: "Casks/workflow-cli.rb",
+    template: new URL("./cask.tmpl", import.meta.url).pathname,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -58,32 +58,30 @@ function parseArgs(argv: string[]): Options {
         opts.template = requireValue(argv, ++i, arg);
         break;
       default:
-        console.error(`[render-formula] ignoring unknown arg: ${arg}`);
+        console.error(`[render-cask] ignoring unknown arg: ${arg}`);
     }
   }
   if (!opts.version) {
-    console.error("[render-formula] --version is required");
+    console.error("[render-cask] --version is required");
     process.exit(1);
   }
   if (!opts.checksums) {
-    console.error("[render-formula] --checksums is required");
+    console.error("[render-cask] --checksums is required");
     process.exit(1);
   }
   return opts;
 }
 
-/** Parse a `sha256sum`-style manifest into asset-name -> hex digest. */
+/** Parse a `shasum`-style manifest into asset-name -> hex digest. */
 export function parseChecksums(text: string): Map<string, string> {
   const map = new Map<string, string>();
   for (const raw of text.split("\n")) {
     const line = raw.trim();
     if (!line) continue;
-    // Format: "<64-hex>  <name>" (sha256sum) or "<64-hex> <name>".
     const m = line.match(/^([0-9a-fA-F]{64})\s+\*?(.+)$/);
     if (!m || m[1] === undefined || m[2] === undefined) {
-      throw new Error(`[render-formula] unparseable checksum line: ${line}`);
+      throw new Error(`[render-cask] unparseable checksum line: ${line}`);
     }
-    // Strip any leading path components; we match on basename.
     const name = (m[2].split("/").pop() ?? m[2]).trim();
     map.set(name, m[1].toLowerCase());
   }
@@ -95,30 +93,28 @@ export function bareVersion(version: string): string {
   return version.replace(/^v/, "");
 }
 
-/** Render the formula template into Ruby source. */
-export function renderFormula(args: {
+/** Render the cask template into Ruby source. */
+export function renderCask(args: {
   template: string;
   version: string;
   repo: string;
   checksums: Map<string, string>;
 }): string {
   const bare = bareVersion(args.version);
-  const tag = args.version.startsWith("v") ? args.version : `v${bare}`;
   const subs = new Map<string, string>();
   subs.set("VERSION", bare);
+  subs.set("REPO", args.repo);
 
   for (const target of RELEASE_TARGETS) {
-    const asset = assetName(target.key);
-    const sha = args.checksums.get(asset);
+    const tarball = tarballName(target, bare);
+    const sha = args.checksums.get(tarball);
     if (!sha) {
       throw new Error(
-        `[render-formula] no checksum for asset ${asset} (target ${target.key})`,
+        `[render-cask] no checksum for asset ${tarball} (target ${target.key})`,
       );
     }
-    const url = `https://github.com/${args.repo}/releases/download/${tag}/${asset}`;
-    const upper = target.key.toUpperCase().replace(/-/g, "_");
-    subs.set(`URL_${upper}`, url);
-    subs.set(`SHA256_${upper}`, sha);
+    const token = `${target.os.toUpperCase()}_${assetArch(target.arch).toUpperCase()}`;
+    subs.set(`SHA256_${token}`, sha);
   }
 
   let out = args.template;
@@ -127,7 +123,7 @@ export function renderFormula(args: {
   }
   const leftover = out.match(/\{\{[A-Z0-9_]+\}\}/);
   if (leftover) {
-    throw new Error(`[render-formula] unfilled placeholder: ${leftover[0]}`);
+    throw new Error(`[render-cask] unfilled placeholder: ${leftover[0]}`);
   }
   return out;
 }
@@ -136,19 +132,19 @@ async function main(): Promise<void> {
   const opts = parseArgs(process.argv.slice(2));
   const template = await Bun.file(opts.template).text();
   const checksums = parseChecksums(await Bun.file(opts.checksums).text());
-  const rendered = renderFormula({
+  const rendered = renderCask({
     template,
     version: opts.version,
     repo: opts.repo,
     checksums,
   });
   await Bun.write(opts.out, rendered);
-  console.error(`[render-formula] wrote ${opts.out} (v${bareVersion(opts.version)})`);
+  console.error(`[render-cask] wrote ${opts.out} (v${bareVersion(opts.version)})`);
 }
 
 if (import.meta.main) {
   main().catch((error) => {
-    console.error("[render-formula] FAILED:", error);
+    console.error("[render-cask] FAILED:", error);
     process.exit(1);
   });
 }

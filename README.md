@@ -21,11 +21,11 @@ interactive session — in a shell, a script, or CI.
 
 ## Install
 
-Homebrew (once releases are cut):
+Homebrew:
 
 ```
-brew tap tomnagengast/workflow
-brew install workflow
+brew tap tomnagengast/tap
+brew install --cask workflow-cli
 ```
 
 From source (Bun required):

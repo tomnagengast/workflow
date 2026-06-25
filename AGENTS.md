@@ -33,9 +33,10 @@ distributed as a single compiled binary via a Homebrew tap.
   writer) + `resume` (replay non-null results into the resume cache) + `store`
   (default-on auto-journal under the state dir; resolves "last" by newest mtime).
 - `scripts/` — `build.ts` (`bun build --compile` wrapper) and `release/`
-  (`targets.ts` matrix, `dry-run.ts` build-sign-Gatekeeper rung, `formula.tmpl`
-  + `render-formula.ts`). `Formula/workflow.rb` is a checked-in **placeholder**;
-  the real formula is rendered at release time and pushed to the tap.
+  (`targets.ts` matrix, `dry-run.ts` build-sign-Gatekeeper rung, `package.ts`
+  build-sign-tar packager, `cask.tmpl` + `render-cask.ts`). The `workflow-cli`
+  cask is rendered at release time and pushed to the shared
+  `tomnagengast/homebrew-tap` (`Casks/`), matching the sibling tools.
 - `test/` — `bun:test` unit, integration, characterization, compat suites.
 - `dev/agent/` — stable non-interactive wrappers agents and CI both run.
 - `docs/` — README index, install, getting-started, usage; deeper agent docs
