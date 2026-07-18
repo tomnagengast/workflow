@@ -48,6 +48,7 @@ export interface Runtime {
   codexArgs: string[];
   codexYolo: boolean;
   sandbox: string | undefined;
+  /** Model for the selected backend. Opposite-backend gates use their default. */
   model: string | undefined;
   concurrency: number;
   budget: number | null;

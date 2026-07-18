@@ -20,6 +20,9 @@ import process from "node:process";
 
 function main() {
   const argv = process.argv.slice(2);
+  if (process.env.WORKFLOW_TEST_CODEX_ARGS) {
+    fs.appendFileSync(process.env.WORKFLOW_TEST_CODEX_ARGS, `${JSON.stringify(argv)}\n`);
+  }
   const outIdx = argv.indexOf("--output-last-message");
   const outFile = outIdx !== -1 ? argv[outIdx + 1] : null;
   const hasSchema = argv.indexOf("--output-schema") !== -1;

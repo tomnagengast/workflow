@@ -7,6 +7,8 @@
 // nested workflow(), budget accounting, and the stdout/stderr split.
 
 import { describe, expect, it } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 const REPO = path.resolve(import.meta.dir, "..", "..");
@@ -15,10 +17,13 @@ const RUN_HOME = path.join(REPO, "test", "fixtures", "run-home");
 const FAKE_CLAUDE = path.join(REPO, "test", "fixtures", "fake-claude.mjs");
 const FAKE_CODEX = path.join(REPO, "test", "fixtures", "fake-codex.mjs");
 
-async function runCli(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+async function runCli(
+  args: string[],
+  env: Record<string, string> = {},
+): Promise<{ code: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(["bun", "run", CLI, ...args], {
     cwd: REPO,
-    env: { ...process.env, NO_COLOR: "1" },
+    env: { ...process.env, ...env, NO_COLOR: "1" },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -28,6 +33,10 @@ async function runCli(args: string[]): Promise<{ code: number; stdout: string; s
   ]);
   const code = await proc.exited;
   return { code, stdout, stderr };
+}
+
+function capturedArgs(file: string): string[][] {
+  return readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
 
 const baseArgs = [
@@ -107,6 +116,46 @@ describe("run with codex orchestrator", () => {
     expect(result.verdictApproved).toBe(true);
     expect(stderr).toContain("[workflow] backend=codex concurrency=");
     expect(stderr).toContain("gate start [claude]");
+  });
+});
+
+describe("model routing", () => {
+  it("passes the model only to the selected backend", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "workflow-model-routing-"));
+    try {
+      for (const testCase of [
+        { backend: "codex", model: "gpt-5.6-sol", selected: "codex", gate: "claude" },
+        { backend: "claude", model: "sonnet", selected: "claude", gate: "codex" },
+      ]) {
+        const claudeCapture = path.join(dir, `${testCase.backend}-claude.jsonl`);
+        const codexCapture = path.join(dir, `${testCase.backend}-codex.jsonl`);
+        const { code } = await runCli(
+          [...baseArgs, "--backend", testCase.backend, "--model", testCase.model],
+          {
+            WORKFLOW_TEST_CLAUDE_ARGS: claudeCapture,
+            WORKFLOW_TEST_CODEX_ARGS: codexCapture,
+          },
+        );
+        expect(code).toBe(0);
+
+        const calls = {
+          claude: capturedArgs(claudeCapture),
+          codex: capturedArgs(codexCapture),
+        };
+        expect(calls[testCase.selected as "claude" | "codex"].length).toBeGreaterThan(0);
+        expect(calls[testCase.gate as "claude" | "codex"].length).toBeGreaterThan(0);
+        for (const args of calls[testCase.selected as "claude" | "codex"]) {
+          expect(args).toContain("--model");
+          expect(args).toContain(testCase.model);
+        }
+        for (const args of calls[testCase.gate as "claude" | "codex"]) {
+          expect(args).not.toContain("--model");
+          expect(args).not.toContain(testCase.model);
+        }
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

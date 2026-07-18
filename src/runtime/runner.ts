@@ -7,6 +7,8 @@
 //   - budget is a hard ceiling: an exhausted dispatch THROWS BudgetError (not
 //     null); a dead subagent (after retries) returns null (callers .filter(Boolean)).
 //   - gate() ALWAYS injected (top-level AND nested); runs on the OPPOSITE backend.
+//   - the configured model belongs to the selected backend; opposite-backend
+//     gates use that backend's default model.
 //   - parallel(): barrier; a thrown thunk -> null (BudgetError re-thrown).
 //   - pipeline(): variadic per-item stages, no barrier; a thrown stage -> null
 //     for that item (BudgetError re-thrown).
@@ -199,7 +201,10 @@ export class WorkflowRunner {
     await this.sem.acquire();
     try {
       console.error(`[workflow:${workflow.name}] ${kind} start [${backendName}]: ${phaseTitle ? `${phaseTitle}:` : ""}${label}`);
-      const { value, tokens } = await BACKENDS[backendName]!(framedPrompt, opts.schema, this.runtime);
+      const runtime = backendName === this.runtime.backend
+        ? this.runtime
+        : { ...this.runtime, model: undefined };
+      const { value, tokens } = await BACKENDS[backendName]!(framedPrompt, opts.schema, runtime);
       this.spent += tokens || 0;
       this.cache.set(key, value);
       this.journal({

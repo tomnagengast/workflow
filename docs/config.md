@@ -39,6 +39,10 @@ Every key is optional and maps 1:1 to a `run` flag:
 `claude_bin` / `codex_bin` also accept the camelCase spellings `claudeBin` /
 `codexBin`. Unknown keys are ignored.
 
+`model` applies only to the selected `backend`. A cross-model `gate()` runs on
+the opposite backend with that backend's default model, so provider-specific
+model names never cross engines.
+
 ### Example
 
 ```toml

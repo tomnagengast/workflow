@@ -17,10 +17,14 @@
 // Shared `.mjs` (not `.ts`) so BOTH the node monolith and the Bun rewrite can
 // execute it for the Phase 4 journal-shape parity diff. No top-level await.
 
+import fs from "node:fs";
 import process from "node:process";
 
 function main() {
   const argv = process.argv.slice(2);
+  if (process.env.WORKFLOW_TEST_CLAUDE_ARGS) {
+    fs.appendFileSync(process.env.WORKFLOW_TEST_CLAUDE_ARGS, `${JSON.stringify(argv)}\n`);
+  }
   const pIdx = argv.indexOf("-p");
   const prompt = pIdx !== -1 ? (argv[pIdx + 1] ?? "") : "";
   const wantsJson = /Return only JSON matching this schema/.test(prompt);
