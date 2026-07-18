@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-07-18
+
+### Fixed
+
+- Kept `--model` scoped to the selected backend so cross-model gates use the
+  opposite backend's default model instead of receiving an invalid
+  provider-specific model name.
+
 ## [0.0.2] - 2026-07-17
 
 ### Changed

@@ -1,6 +1,6 @@
 {
   "name": "workflow",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Standalone runner for Claude Code dynamic workflow scripts.",
   "type": "module",
   "license": "MIT",
