@@ -29,9 +29,9 @@ distributed as a single compiled binary via a Homebrew tap.
 - `src/backends/` — `claude` / `codex` agent backends, `spawn` (never-reject
   child process), and the `BACKENDS` registry + read-only PATH preflight.
 - `src/schema/` — `tryParseJson` + `schemaOk` (structured-output helpers).
-- `src/journal/` — `journal` (FROZEN append-mode jsonl `started`/`result`
-  writer) + `resume` (replay non-null results into the resume cache) + `store`
-  (default-on auto-journal under the state dir; resolves "last" by newest mtime).
+- `src/journal/` — `journal` (ordered semantic JSONL event stream) + `resume`
+  (replay successful agent results into the resume cache) + `store` (default-on
+  auto-journal under the state dir; resolves "last" by newest mtime).
 - `scripts/` — `build.ts` (`bun build --compile` wrapper) and `release/`
   (`targets.ts` matrix, `dry-run.ts` build-sign-Gatekeeper rung, `package.ts`
   build-sign-tar packager, `cask.tmpl` + `render-cask.ts`). The `workflow-cli`
@@ -62,9 +62,11 @@ several modules must stay byte-identical to it. Do not "fix" its quirks.
   (`bun build --compile --bytecode`), which forbids TLA. Every module reachable
   from `src/cli.ts` must wrap async work in `async function main(){…}; main()`.
 - **Frozen-byte modules** (agentKey `v2:` hash, prompt builders + `GATE_SCHEMA`,
-  the export-strip/async-IIFE transform, jsonl `started`/`result` shapes, the
-  `parseOptions` arg parser) must stay byte-identical to the monolith. Changing
-  them breaks resume/journal portability.
+  the export-strip/async-IIFE transform, and the `parseOptions` arg parser) must
+  stay byte-identical to the monolith.
+- The journal is the complete machine-readable runtime contract. Append each
+  semantic observation before execution continues, preserve one contiguous
+  sequence per run, and never derive it by parsing human terminal output.
 - `gate()` is **always** injected into the sandbox (top-level and nested).
 - Preserve current behavior, including quirks (e.g. `youtube-to-guide` mutates
   but lacks the `MUTATING` marker — do not "fix" the guard).

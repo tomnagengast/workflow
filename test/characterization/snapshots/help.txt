@@ -14,7 +14,7 @@ Run options:
   --budget N                            Token budget for budget.total (default: unlimited)
   --model MODEL                         Model passed to the backend
   --schema-retries N                    Retries when an agent reply fails its schema (default: 2)
-  --journal FILE                        Write a started/result journal (jsonl)
+  --journal FILE                        Write the semantic event journal (jsonl)
   --resume FILE                         Replay cached agent() results from a prior journal
   --no-validate                         Skip the loader validation (size / meta / banned tokens)
   --verbose                             Stream backend logs to stderr

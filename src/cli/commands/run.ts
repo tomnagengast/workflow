@@ -75,15 +75,11 @@ export async function run(workflows: Catalog, cwd: string, args: string[]): Prom
     concurrency: Number.isFinite(concurrency) && concurrency > 0 ? concurrency : cfg.concurrency,
     budget: Number.isFinite(budget) && budget > 0 ? budget : cfg.budget,
     schemaRetries: Number.isFinite(schemaRetries) && schemaRetries >= 0 ? schemaRetries : DEFAULT_SCHEMA_RETRIES,
-    // Auto-journal (Phase 8): with no explicit `--journal`, every run still
-    // journals — to a fresh per-run file in the state dir (~/.local/state/
-    // workflow/). The bytes are the FROZEN `started`/`result` shapes (same
-    // `Journal` writer), so an auto-journal and a manual `--journal` file are
-    // interchangeable. An explicit `--journal FILE` still wins verbatim.
+    // Every run writes its ordered semantic event stream. An explicit journal
+    // path wins; otherwise use a fresh file in the state directory.
     journalPath: opts.journal ? path.resolve(opts.journal as string) : newJournalPath(workflow.name),
     // Resume cache: explicit `--resume FILE` wins; otherwise `--resume-last`
-    // replays the newest auto-journal in the state dir (byte-compatible with
-    // manual `--journal` files via the same `loadResume`).
+    // replays the newest auto-journal using the same format as manual journals.
     resumeCache: loadResume(resolveResumeFile(opts)),
     noValidate: Boolean(opts.noValidate),
     verbose: Boolean(opts.verbose),

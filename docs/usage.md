@@ -26,9 +26,17 @@ text as each command is implemented.
 
 ## Journaling & resume
 
-Every `run` writes a journal of its subagent dispatches. Each line is one JSON
-event (`started` / `result`) — the same shape whether the file is auto-written
-or explicitly placed with `--journal`, so the two are interchangeable.
+Every `run` writes one ordered JSONL stream containing each semantic runtime
+observation before execution continues:
+
+- runtime start, completion, and failure
+- phase changes, workflow logs, and diagnostics
+- agent, gate, and nested-workflow start, cache hit, completion, and failure
+
+Every event has a contiguous `sequence`, timestamp, event `type`, and workflow
+name. Step events also carry their stable cache key, per-run step ID, backend,
+kind, prompt, result, error, and token count when applicable. Auto-written and
+explicit journals use the same format.
 
 - **Auto-journal (default on):** with no `--journal`, each run journals to a
   fresh per-run file under the state dir — `$XDG_STATE_HOME/workflow/` if set,
@@ -42,6 +50,6 @@ or explicitly placed with `--journal`, so the two are interchangeable.
   in the state dir (resolved by modification time).
 
 Resume reuses recorded results and does not re-spend the token budget for them,
-so a fully-resumed run reports `spent: 0`. Because cache hits are not
-re-journaled, the journal a resumed run writes is empty — resuming a run that was
-itself a resume therefore replays nothing.
+so a fully resumed run reports `spent: 0`. Cache hits are recorded as
+`step.cached`, which makes resumed runs fully observable and reusable as later
+resume sources.

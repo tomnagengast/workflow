@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-07-17
+
+### Changed
+
+- Replaced the dispatch-only journal with a complete ordered semantic event
+  stream covering runtime lifecycle, phases, logs, diagnostics, agent and gate
+  steps, cache hits, nested workflows, results, and failures.
+- Resume runs now journal cache hits, preserving both observability and the
+  ability to resume from a resumed run.
+- Fixed the CI release smoke to render the Homebrew cask through the published
+  `release:cask` command.
+
 ## [0.0.1] - 2026-06-24
 
 First release of the Bun + TypeScript rewrite of the standalone workflow runner,

@@ -1,11 +1,10 @@
-// Integration — Phase 8 minimal auto-journal + resume --last.
+// Integration — complete semantic auto-journal + resume --last.
 //
 // Asserts the new default-on filesystem behavior end-to-end against the fake
 // backend bins, all sandboxed under a temp `XDG_STATE_HOME` so nothing touches
 // the developer's real `~/.local/state`:
 //
-//   1. A plain `run` (no `--journal`) auto-journals to the state dir, and the
-//      on-disk lines carry the FROZEN `started`/`result` shapes.
+//   1. A plain `run` records every semantic runtime observation in order.
 //   2. `run --resume-last` (and the `resume --last` alias) replay the newest
 //      auto-journal: backends are NOT re-spawned (stderr shows `cached:`), and
 //      the result is identical.
@@ -17,6 +16,7 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { JOURNAL_EVENT_TYPES } from "../../src/journal/journal.ts";
 
 const REPO = path.resolve(import.meta.dir, "..", "..");
 const CLI = path.join(REPO, "src", "cli.ts");
@@ -71,11 +71,11 @@ function listJournals(): string[] {
   } catch {
     return [];
   }
-  return entries.filter((e) => e.endsWith(".jsonl")).map((e) => path.join(journalsDir, e));
+  return entries.filter((e) => e.endsWith(".jsonl")).sort().map((e) => path.join(journalsDir, e));
 }
 
 describe("auto-journal (default-on)", () => {
-  it("writes a journal under the state dir with the FROZEN started/result shapes", async () => {
+  it("writes the complete ordered semantic event stream", async () => {
     const { code, stdout } = await runCli(RUN);
     expect(code).toBe(0);
     const result = JSON.parse(stdout);
@@ -87,20 +87,37 @@ describe("auto-journal (default-on)", () => {
     expect(lines.length).toBeGreaterThan(0);
 
     const events = lines.map((l) => JSON.parse(l));
-    // every line is one of the two frozen event types
-    for (const ev of events) {
-      expect(["started", "result"]).toContain(ev.type);
-      // frozen field set + insertion order: type,key,agentId,backend,kind,[result],[error]
-      const keys = Object.keys(ev);
-      expect(keys.slice(0, 5)).toEqual(["type", "key", "agentId", "backend", "kind"]);
+    expect(events.map((event) => event.sequence)).toEqual(
+      Array.from({ length: events.length }, (_, index) => index + 1),
+    );
+    for (const event of events) {
+      expect(JOURNAL_EVENT_TYPES).toContain(event.type);
+      expect(event.workflow).toBeTruthy();
+      expect(Number.isNaN(Date.parse(event.at))).toBe(false);
     }
-    // at least one successful result event was recorded (so resume has something
-    // to replay)
-    const okResults = events.filter((e) => e.type === "result" && e.result !== null && e.key);
+    expect(events[0].type).toBe("runtime.started");
+    expect(events.at(-1).type).toBe("runtime.completed");
+    expect(events.some((event) => event.type === "phase.started")).toBe(true);
+    expect(events.some((event) => event.type === "log")).toBe(true);
+    expect(events.some((event) => event.kind === "workflow")).toBe(true);
+    expect(events.find((event) => event.type === "step.started" && event.kind === "agent").message)
+      .toContain("TASK");
+    const okResults = events.filter((event) =>
+      event.type === "step.completed" && event.kind !== "workflow" && event.result !== null && event.key
+    );
     expect(okResults.length).toBeGreaterThan(0);
 
     // result is observable / stable for the cross-resume assertions below
     expect(result.verdictApproved).toBe(true);
+  });
+
+  it("records step and runtime failures before exiting", async () => {
+    const { code } = await runCli([...RUN, "--budget", "1"]);
+    expect(code).toBe(1);
+    const events = readFileSync(listJournals()[0]!, "utf8")
+      .trim().split("\n").map((line) => JSON.parse(line));
+    expect(events.some((event) => event.type === "step.failed")).toBe(true);
+    expect(events.at(-1).type).toBe("runtime.failed");
   });
 });
 
@@ -124,6 +141,10 @@ describe("resume --last", () => {
     // and it replayed from cache instead of dispatching
     expect(second.stderr).toContain("cached:");
     expect(second.stderr).not.toContain("start [");
+    const replay = readFileSync(listJournals().at(-1)!, "utf8")
+      .trim().split("\n").map((line) => JSON.parse(line));
+    expect(replay.some((event) => event.type === "step.cached")).toBe(true);
+    expect(replay.at(-1).type).toBe("runtime.completed");
   });
 
   it("`resume --last <workflow>` alias behaves the same as run --resume-last", async () => {
@@ -152,7 +173,7 @@ describe("resume --last", () => {
   });
 });
 
-describe("manual <-> auto cross-resume (byte-compatible)", () => {
+describe("manual <-> auto cross-resume (format-compatible)", () => {
   it("an auto-journal can be replayed with an explicit --resume FILE", async () => {
     await runCli(RUN);
     const auto = listJournals()[0]!;

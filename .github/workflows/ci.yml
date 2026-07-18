@@ -66,10 +66,12 @@ jobs:
             --journal /tmp/run.jsonl > /tmp/run.out
           grep -q '"verdictApproved": true' /tmp/run.out
           grep -q '"spent": 49' /tmp/run.out
-          # frozen journal writer survives --bytecode: 16 started/result lines
-          test "$(wc -l < /tmp/run.jsonl)" -eq 16
-          grep -q '"type":"started"' /tmp/run.jsonl
-          grep -q '"type":"result"' /tmp/run.jsonl
+          # complete ordered semantic journal survives --bytecode
+          test "$(wc -l < /tmp/run.jsonl)" -eq 25
+          grep -q '"type":"runtime.started"' /tmp/run.jsonl
+          grep -q '"type":"phase.started"' /tmp/run.jsonl
+          grep -q '"type":"step.completed"' /tmp/run.jsonl
+          grep -q '"type":"runtime.completed"' /tmp/run.jsonl
           # --resume replays from the journal cache (no fresh dispatch -> spent 0)
           /tmp/wf-run --cwd "$PWD/test/fixtures/run-home" run runner-demo \
             --claude-bin "$PWD/test/fixtures/fake-claude.mjs" \
@@ -94,16 +96,13 @@ jobs:
         run: bun install --frozen-lockfile
       - name: build 4 targets + sign + launch (no publish)
         run: bun run release:dry-run
-      - name: render formula from dry-run checksums (smoke)
-        # Proves the render path end-to-end against real artifact checksums,
-        # without touching the tap. Asserts a plausible Ruby formula falls out.
+      - name: render cask from dry-run checksums (smoke)
         run: |
           ( cd dist/release-dryrun && shasum -a 256 workflow-* > checksums.txt )
-          bun run release:formula \
+          bun run release:cask \
             --version v0.0.0-ci \
             --checksums dist/release-dryrun/checksums.txt \
             --repo "$GITHUB_REPOSITORY" \
-            --out /tmp/workflow.rb
-          grep -q 'class Workflow < Formula' /tmp/workflow.rb
-          grep -q 'on_macos do' /tmp/workflow.rb
-          grep -q 'on_linux do' /tmp/workflow.rb
+            --out /tmp/workflow-cli.rb
+          grep -q 'cask "workflow-cli"' /tmp/workflow-cli.rb
+          grep -q 'on_macos do' /tmp/workflow-cli.rb

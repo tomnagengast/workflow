@@ -48,8 +48,9 @@ workflow list
 
 The dynamic-workflow runtime is normally reachable only inside an interactive
 Claude Code session. `workflow` reimplements that runtime contract as a portable,
-scriptable binary — same loader, sandbox, prompts, and journal shapes — so the
-workflows you already have become composable command-line tools.
+scriptable binary with the same loader, sandbox, and prompts, plus a complete
+semantic event journal, so the workflows you already have become composable
+command-line tools.
 
 ## Status
 

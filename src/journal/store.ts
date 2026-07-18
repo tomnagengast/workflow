@@ -1,17 +1,7 @@
-// Auto-journal store (Phase 8) — a default-on state dir for run journals.
+// Auto-journal store: a default-on state dir for run journals.
 //
-// The monolith journals ONLY when you pass `--journal FILE`; there is no default
-// on-disk side effect. Phase 8 adds a minimal auto-journal: every `run` that
-// does NOT pass an explicit `--journal` still writes its journal to a per-run
-// file under a state dir, and `--resume-last` (or `resume --last`) replays the
-// newest one.
-//
-// BYTE-COMPAT INVARIANT: the auto-journal is a *location*, not a new format. The
-// runner writes the same `Journal` (journal/journal.ts) it always has, so the
-// on-disk lines carry the exact FROZEN `started`/`result` shapes. That makes
-// auto-journals and manual `--journal` files interchangeable: `resume --last`
-// reads an auto-journal with the same `loadResume`, and a manual `--journal`
-// file can be replayed with `--resume`, and vice-versa.
+// Every run without an explicit `--journal` writes its complete semantic event
+// stream to a per-run file. Auto and explicit journals share the same format.
 //
 // NO `runs` index/prune subsystem (deferred per the plan): "last" is resolved by
 // newest mtime over the journal files in the dir — no manifest, no GC.
@@ -38,7 +28,7 @@ export function stateDir(env: NodeJS.ProcessEnv = process.env): string {
 /** Compute a fresh, unique auto-journal path for a run and ensure its parent dir
  * exists. The filename encodes the workflow name (sanitized) plus a timestamp +
  * pid so concurrent/back-to-back runs never collide. Returns the absolute path;
- * the file itself is created lazily by the `Journal` write stream. */
+ * the file itself is created by the first journal append. */
 export function newJournalPath(
   workflowName: string,
   env: NodeJS.ProcessEnv = process.env,
