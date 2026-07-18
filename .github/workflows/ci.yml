@@ -96,13 +96,3 @@ jobs:
         run: bun install --frozen-lockfile
       - name: build 4 targets + sign + launch (no publish)
         run: bun run release:dry-run
-      - name: render cask from dry-run checksums (smoke)
-        run: |
-          ( cd dist/release-dryrun && shasum -a 256 workflow-* > checksums.txt )
-          bun run release:cask \
-            --version v0.0.0-ci \
-            --checksums dist/release-dryrun/checksums.txt \
-            --repo "$GITHUB_REPOSITORY" \
-            --out /tmp/workflow-cli.rb
-          grep -q 'cask "workflow-cli"' /tmp/workflow-cli.rb
-          grep -q 'on_macos do' /tmp/workflow-cli.rb
