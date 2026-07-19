@@ -16,6 +16,8 @@ workflow [--cwd DIR] <command> [options]
 
 - `list [--json]` — list resolved workflows.
 - `show <name> [--json]` — show a workflow's metadata.
+- `validate <name|path> [--json]` — validate a discovered workflow or explicit
+  workflow file without running it.
 - `run <name|path> [--args JSON|@file]` — run a discovered workflow or an
   explicit workflow file against real subagents.
 - `resume --last <name> [run options]` — replay the most recent run of `<name>`
@@ -24,6 +26,20 @@ workflow [--cwd DIR] <command> [options]
 Run `workflow --help` for the full, current option set (backend, concurrency,
 budget, journaling, and backend-specific flags). This document tracks that help
 text as each command is implemented.
+
+## Validation
+
+`validate` uses the same loader checks as `run`, but never executes the
+workflow:
+
+```sh
+workflow validate <name>
+workflow validate /path/to/workflow.js
+```
+
+It checks the complete JavaScript source, the required first metadata export,
+the source size limit, and constructs that would break deterministic resume.
+Use `--json` for machine-readable output.
 
 ## Explicit workflow files
 
