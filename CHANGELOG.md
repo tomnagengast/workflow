@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-07-18
+
 ### Added
 
 - `workflow run` accepts an explicit workflow file while `--cwd` independently
