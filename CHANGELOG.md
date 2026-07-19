@@ -6,10 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-07-19
+
 ### Changed
 
 - Removed the external test dependency. The public CLI and its committed
   snapshots and golden tests now define the full contract.
+- Listed `workflow validate <name|path>` in the normal CLI help and documented
+  its read-only loader checks.
 
 ## [0.0.4] - 2026-07-18
 
