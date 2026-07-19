@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-07-19
+
 ### Added
 
 - `gate(prompt, { reviewer })` now accepts `agent`, `codex`, `claude`, or
