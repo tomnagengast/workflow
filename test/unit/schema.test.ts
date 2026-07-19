@@ -1,7 +1,4 @@
-// Unit — tryParseJson + schemaOk.
-//
-// Mirrors the monolith's structured-output helpers
-// (`/Users/tom/cmptr/bin/workflow` ~334-362): fence-aware JSON extraction with
+// Structured-output helpers: fence-aware JSON extraction with
 // trailing-junk trimming, and the light top-level type + required-keys check that
 // drives the claude schema-retry loop.
 

@@ -1,10 +1,7 @@
 // FROZEN GOLDEN — prompt framing + GATE_SCHEMA byte-identity.
 //
-// Locks buildAgentPrompt / buildGatePrompt / GATE_SCHEMA / opposite against the
-// live monolith (`/Users/tom/cmptr/bin/workflow` ~449-495). The framed prompt is
-// what agentKey() hashes, so any drift here invalidates every cached/journaled
-// result. Treat a failure as a P0 regression. The literals below were emitted by
-// the monolith's functions.
+// The framed prompt is what agentKey() hashes, so drift invalidates cached and
+// journaled results. Treat a failure as a P0 regression.
 
 import { describe, expect, it } from "bun:test";
 import { buildAgentPrompt, buildGatePrompt, GATE_SCHEMA, opposite } from "../../src/runtime/prompts.ts";

@@ -2,7 +2,7 @@
 
 **Run your Claude Code dynamic workflows from the terminal, against real agents — no interactive session required.**
 
-> Status: pre-1.0, in active rewrite. Bun + TypeScript, shipped as a single binary.
+> Status: pre-1.0 and in active development. Bun + TypeScript, shipped as a single binary.
 
 Claude Code's "dynamic workflows" are JavaScript scripts in `~/.claude/workflows`
 (and project `.claude/workflows`) that orchestrate fan-out subagents, gates, and
@@ -55,9 +55,8 @@ command-line tools.
 
 ## Status
 
-Pre-1.0. The CLI surface and behavior are being rebuilt phase by phase against
-the legacy runner as a behavior oracle. Expect rough edges until the first
-tagged release.
+Pre-1.0 and released. Committed snapshots and golden tests lock stable CLI and
+runtime contracts while the tool continues to evolve.
 
 ## Docs
 

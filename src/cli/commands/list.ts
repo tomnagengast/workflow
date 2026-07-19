@@ -1,9 +1,5 @@
-// `list` command.
-//
-// Byte-faithful to the monolith's list branch (`/Users/tom/cmptr/bin/workflow`
-// ~717-726): `--json` prints the sorted rows (each carrying the raw, un-flattened
-// `meta` verbatim — the parity contract) as 2-space JSON; otherwise the colorized
-// table. No top-level await.
+// `list --json` prints sorted rows with raw, un-flattened `meta`; plain `list`
+// prints the terminal table.
 
 import type { Catalog } from "../../types.ts";
 import { parseOptions } from "../args.ts";

@@ -1,9 +1,4 @@
-// Workflow name resolution.
-//
-// Byte-faithful to the monolith's `NAME_RE` + `requireWorkflow`
-// (`/Users/tom/cmptr/bin/workflow` ~35, ~276-284): validate the requested name
-// against the allowed character set, then look it up in the catalog, throwing a
-// sorted "Available: …" list on a miss. No top-level await.
+// Validate workflow names and resolve them from the catalog.
 
 import type { Catalog, WorkflowRow } from "../types.ts";
 

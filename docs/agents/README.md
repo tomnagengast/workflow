@@ -7,12 +7,10 @@ touching.
 
 ## Where to read next
 
-- **Product / behavior contract** — the legacy monolith
-  `/Users/tom/cmptr/bin/workflow` is the behavior oracle. Several modules must
-  stay byte-identical to it (agentKey hash, prompt builders, the
-  export-strip/async-IIFE transform, and the `parseOptions` parser). The journal
-  is the newer complete semantic runtime contract documented in
-  [`../usage.md`](../usage.md).
+- **Product / behavior contract** — this repository is the sole contract.
+  Snapshots and golden tests lock the agentKey hash, prompt builders,
+  export-strip/async-IIFE transform, `parseOptions` parser, CLI output, and
+  complete semantic journal documented in [`../usage.md`](../usage.md).
 - **Build / runtime constraint** — the compiled binary is CJS
   (`bun build --compile --bytecode`), so there is no top-level await on the load
   path. Wrap async work in `async function main(){…}; main()`.

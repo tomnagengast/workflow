@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Deterministic fake `codex` backend bin for tests + parity.
+// Deterministic fake `codex` backend for tests.
 //
 // Invoked by the codex backend as:
 //   codex exec --skip-git-repo-check --cd CWD [--model M] [--sandbox S]
@@ -12,8 +12,7 @@
 // schema-shaped JSON object when `--output-schema` was passed (the gate path),
 // else plain text echoing the prompt. exit 0.
 //
-// Shared `.mjs` so both the node monolith and the Bun rewrite can execute it for
-// the Phase 4 parity diff. No top-level await.
+// Shared `.mjs` lets source and compiled CLI tests execute the same fixture.
 
 import fs from "node:fs";
 import process from "node:process";

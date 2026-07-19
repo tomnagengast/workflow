@@ -1,13 +1,8 @@
-// Codex backend: engine-independent JSON-parse error text (Phase 4 parity).
+// Codex backend: engine-independent JSON parse error text.
 //
-// The monolith does a raw `JSON.parse(output)` on the codex result file and lets
-// the engine's error propagate into the journal's `error` string. Under Bun that
-// message diverges from Node's (e.g. "JSON Parse error: Unexpected EOF" vs
-// "Unexpected end of JSON input"), which would break journal byte-parity with the
-// node monolith on the parse-failure path (reproduced when a fake/real codex bin
-// writes nothing to --output-last-message). codexBackend normalizes the empty-
-// output case to V8's canonical text so the captured journal error is engine-
-// independent. This test locks that.
+// Bun and Node use different messages for the same failure. codexBackend
+// normalizes empty output to V8's canonical text so persisted journal errors are
+// stable across engines.
 
 import { describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync, chmodSync } from "node:fs";
@@ -71,8 +66,7 @@ describe("codexBackend JSON-parse error normalization", () => {
       } catch (e) {
         msg = (e as Error).message;
       }
-      // The node monolith (V8) emits exactly this; the rewrite must match it
-      // regardless of running under Bun.
+      // Keep this persisted error stable regardless of the current engine.
       expect(msg).toBe("Unexpected end of JSON input");
     } finally {
       rmSync(dir, { recursive: true, force: true });

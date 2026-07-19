@@ -1,9 +1,7 @@
-// Phase 5 — characterization: the rewrite's CLI surface == the live monolith's.
+// Characterization tests for the CLI's stable output.
 //
-// Every case here records a committed snapshot of the LIVE MONOLITH's redacted
-// output (the oracle) and asserts the REWRITE reproduces it byte-for-byte. The
-// snapshots live in ./snapshots/ and are checked in; regenerate with
-// WF_UPDATE_SNAPSHOTS=1 on a machine that has the monolith.
+// The snapshots live in ./snapshots/ and are checked in. Regenerate them with
+// WF_UPDATE_SNAPSHOTS=1 when accepting an intentional output change.
 //
 // Surfaces covered (per the Phase 5 plan):
 //   --help; list plain + --json; show plain + --json; discovery precedence +
@@ -15,8 +13,8 @@
 //
 // Order-nondeterministic stderr (parallel/pipeline interleaving) is NOT snapshot
 // byte-for-byte: those cases snapshot stdout+exit and assert the stable stderr
-// lines structurally. Engine-dependent error text (V8-vs-JSC JSON.parse) is
-// characterized structurally, not byte-snapshotted, and the divergence is noted.
+// lines structurally. Engine-dependent JSON.parse error text is also checked by
+// structure rather than exact bytes.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { cpSync, mkdirSync } from "node:fs";
@@ -27,9 +25,8 @@ import {
   FAKE_CODEX,
   FIXTURES,
   type FixtureEnv,
-  HAS_MONOLITH,
   makeEnv,
-  runRewrite,
+  runCli,
 } from "./harness.ts";
 
 // ---- discovery / list / show: the user-workflows fixture set ----
@@ -118,16 +115,16 @@ describe("run surface (fake backends)", () => {
   // and a nested workflow(). stderr ordering interleaves nondeterministically, so
   // it is asserted structurally below, not byte-snapshotted.
   test("object-result -> pretty JSON on stdout only (exit 0)", async () => {
-    const { rewrite } = await characterize(
+    const result = await characterize(
       env,
       "run-runner-demo-stdout.txt",
       ["run", "runner-demo", ...fakeBins],
       { includeStdout: true, includeStderr: false },
     );
     // Structural stderr checks (order-independent): banner + opposite-backend gate.
-    expect(rewrite.stderr).toContain("[workflow] backend=claude concurrency=");
-    expect(rewrite.stderr).toContain("gate start [codex]");
-    expect(rewrite.stderr).toContain("gate done [codex]");
+    expect(result.stderr).toContain("[workflow] backend=claude concurrency=");
+    expect(result.stderr).toContain("gate start [codex]");
+    expect(result.stderr).toContain("gate done [codex]");
   });
 
   test("string-result -> raw stdout (mutating workflow w/ --allow-mutating)", async () => {
@@ -139,15 +136,15 @@ describe("run surface (fake backends)", () => {
     );
   });
 
-  test("codex orchestrator: gate flips to claude (stdout parity)", async () => {
-    const { rewrite } = await characterize(
+  test("codex orchestrator: gate flips to claude", async () => {
+    const result = await characterize(
       env,
       "run-runner-demo-codex.txt",
       ["run", "runner-demo", "--backend", "codex", ...fakeBins],
       { includeStdout: true, includeStderr: false },
     );
-    expect(rewrite.stderr).toContain("[workflow] backend=codex concurrency=");
-    expect(rewrite.stderr).toContain("gate start [claude]");
+    expect(result.stderr).toContain("[workflow] backend=codex concurrency=");
+    expect(result.stderr).toContain("gate start [claude]");
   });
 
   test("mutating refusal without --allow-mutating -> exit 1", async () => {
@@ -178,12 +175,9 @@ describe("run surface (fake backends)", () => {
 
 // ---- engine-dependent surface: characterized structurally, NOT byte-snapshotted ----
 //
-// `loadArgs` does `JSON.parse(raw)`; the thrown message is the JS engine's own
-// text. The monolith runs on node/V8 ("Expected property name or '}' in JSON at
-// position 1..."); the rewrite runs on Bun/JSC ("JSON Parse error: Expected
-// '}'"). The two diverge by construction — same class as the Phase 4 codex-parse
-// divergence — so we lock the STRUCTURE (exit 1, banner first, then a non-empty
-// error line on stderr), not the engine-specific bytes.
+// `loadArgs` does `JSON.parse(raw)`, whose message may change with the JavaScript
+// engine. Lock the structure instead: exit 1, banner first, then a non-empty
+// error line on stderr.
 describe("invalid --args JSON (engine-dependent message, structural check)", () => {
   let env: FixtureEnv;
   beforeAll(() => {
@@ -192,7 +186,7 @@ describe("invalid --args JSON (engine-dependent message, structural check)", () 
   afterAll(() => env.dispose());
 
   test("exit 1 with banner then a non-empty parse error on stderr", async () => {
-    const r = await runRewrite(env, [
+    const r = await runCli(env, [
       "run", "nested-leaf",
       "--claude-bin", FAKE_CLAUDE, "--codex-bin", FAKE_CODEX,
       "--args", "{bad",
@@ -200,13 +194,7 @@ describe("invalid --args JSON (engine-dependent message, structural check)", () 
     expect(r.code).toBe(1);
     const lines = r.stderr.trim().split("\n");
     expect(lines[0]).toMatch(/^\[workflow\] backend=claude concurrency=/);
-    // some engine-specific JSON parse error follows the banner
+    // Some engine-specific JSON parse error follows the banner.
     expect(lines.slice(1).join("\n").trim().length).toBeGreaterThan(0);
   });
-});
-
-// Surface the oracle-availability state so a CI run without the monolith is
-// explicit (it still asserts against committed snapshots; it just can't refresh).
-test("oracle availability is recorded", () => {
-  expect(typeof HAS_MONOLITH).toBe("boolean");
 });

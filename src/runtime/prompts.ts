@@ -1,9 +1,7 @@
 // FROZEN MODULE — prompt framing + GATE_SCHEMA + opposite().
 //
-// Byte-faithful to the monolith (`/Users/tom/cmptr/bin/workflow` ~449-495,
-// ~466-468). These strings feed agentKey() (the framed prompt is what gets
-// hashed), so any change here silently invalidates every cached/journaled result
-// and breaks resume. They MUST stay byte-identical:
+// These strings feed agentKey(), so any change invalidates cached and journaled
+// results and breaks resume. They must stay byte-stable:
 //   - buildAgentPrompt header lines + the schema footer (exact wording/newlines).
 //   - buildGatePrompt lines (exact wording/newlines).
 //   - GATE_SCHEMA (default cross-model verdict schema).
@@ -13,9 +11,7 @@
 
 import type { WorkflowRow } from "../types.ts";
 
-/** Build the framed prompt handed to an agent() backend. Byte-identical to the
- * monolith's `buildAgentPrompt`: header lines (dropping falsy ones via
- * `.filter(Boolean)`), then an optional JSON-schema footer. */
+/** Build the framed prompt handed to an agent backend. */
 export function buildAgentPrompt({
   workflow,
   phaseTitle,
@@ -45,13 +41,12 @@ Return only JSON matching this schema. No prose, no markdown fences:
 ${JSON.stringify(schema)}`;
 }
 
-/** Return the opposite backend name. Byte-identical to the monolith. */
+/** Return the opposite backend name. */
 export function opposite(backend: string): string {
   return backend === "claude" ? "codex" : "claude";
 }
 
-/** Default verdict schema for a cross-model gate(); workflows may pass their own.
- * Byte-identical to the monolith's `GATE_SCHEMA`. */
+/** Default verdict schema for a cross-model gate; workflows may pass their own. */
 export const GATE_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -64,8 +59,7 @@ export const GATE_SCHEMA = {
   },
 } as const;
 
-/** Build the framed prompt handed to the cross-model gate() backend.
- * Byte-identical to the monolith's `buildGatePrompt`. */
+/** Build the framed prompt handed to the cross-model gate backend. */
 export function buildGatePrompt({
   workflow,
   backendName,

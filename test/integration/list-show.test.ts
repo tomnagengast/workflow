@@ -3,10 +3,8 @@
 // subprocess with a temp HOME so the user-scope discovery root resolves to our
 // fixtures, exercising the full path (catalog -> meta eval in vm -> render).
 //
-// These assertions are the committable, monolith-free stand-in for the plan's
-// `diff … list --json … monolith` parity check: Phase 5 adds the live-monolith
-// characterization snapshots; here we lock the SHAPE — including the raw,
-// un-flattened `meta` carried verbatim in `--json`, scope shadowing, the
+// These assertions lock the response shape, including raw, un-flattened `meta`
+// carried verbatim in `--json`, scope shadowing, the
 // MUTATING substring guard, and the no-meta default row.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -32,7 +30,7 @@ beforeAll(() => {
 
   // A project cwd carrying its own `.claude/workflows` that shadows user-scope
   // `alpha`. Copied to a temp dir so the test never depends on the fixture path
-  // being inside a git repo (repoRoot() may resolve to the rewrite's own repo).
+  // being inside a git repo (repoRoot() may resolve to this repository).
   projectCwd = mkdtempSync(path.join(tmpdir(), "wf-proj-"));
   cpSync(path.join(fixtures, "project", "repo"), projectCwd, { recursive: true });
 });

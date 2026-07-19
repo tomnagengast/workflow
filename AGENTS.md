@@ -4,8 +4,7 @@
 (`~/.claude/workflows/*.js` and project `.claude/workflows/*.js`). It discovers,
 inspects, and executes those scripts against real `claude` / `codex` subagents,
 outside an interactive Claude Code session. This repo is a Bun + TypeScript
-rewrite of the legacy single-file Node runner at `/Users/tom/cmptr/bin/workflow`,
-distributed as a single compiled binary via a Homebrew tap.
+implementation distributed as a single compiled binary via a Homebrew tap.
 
 ## Repository map
 
@@ -13,9 +12,8 @@ distributed as a single compiled binary via a Homebrew tap.
 - `src/version.ts` — version source of truth (`--define`-injectable at build).
 - `src/types.ts` — shared type skeleton, grown as features land.
 - `src/cli/` — arg parsing (frozen `parseOptions`), help text, terminal
-  rendering, and `commands/{list,show,run,validate,doctor}` (more land in later
-  phases). `validate`/`doctor` are read-only diagnostics (not in the frozen
-  `--help` USAGE, which mirrors the monolith).
+  rendering, and `commands/{list,show,run,validate,doctor}`. `validate` and
+  `doctor` are read-only diagnostics not included in the frozen `--help` text.
 - `src/discovery/` — `catalog` (workflow dirs + git repo root + shadowing),
   `resolve` (`NAME_RE` + `requireWorkflow`), and `target` (explicit workflow
   file resolution independent of the agent working directory).
@@ -43,8 +41,9 @@ distributed as a single compiled binary via a Homebrew tap.
 - `docs/` — README index, install, getting-started, usage; deeper agent docs
   under `docs/agents/`.
 
-The legacy monolith `/Users/tom/cmptr/bin/workflow` is the behavior **oracle**:
-several modules must stay byte-identical to it. Do not "fix" its quirks.
+This repository is the sole implementation and behavior source. Stable CLI
+output, persisted hashes, prompts, transforms, and journal shapes are locked by
+snapshots and golden tests.
 
 ## Golden-path commands
 
@@ -64,7 +63,8 @@ several modules must stay byte-identical to it. Do not "fix" its quirks.
   from `src/cli.ts` must wrap async work in `async function main(){…}; main()`.
 - **Frozen-byte modules** (agentKey `v2:` hash, prompt builders + `GATE_SCHEMA`,
   the export-strip/async-IIFE transform, and the `parseOptions` arg parser) must
-  stay byte-identical to the monolith.
+  stay byte-stable because journals, resume keys, and authored workflows depend
+  on them.
 - The journal is the complete machine-readable runtime contract. Append each
   semantic observation before execution continues, preserve one contiguous
   sequence per run, and never derive it by parsing human terminal output.

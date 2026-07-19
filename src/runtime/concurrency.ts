@@ -1,26 +1,21 @@
-// Concurrency primitives.
-//
-// Byte-faithful to the monolith (`/Users/tom/cmptr/bin/workflow` ~39-66):
+// Concurrency primitives:
 //   - `Semaphore`: a FIFO async limiter shared across ALL agent()/gate() calls in
 //     a run. acquire() resolves immediately when under capacity, else queues a
 //     resolver; release() pops the queue (FIFO) and hands the slot to the waiter.
 //   - `defaultConcurrency`: Math.min(16, Math.max(2, cores - 2)) — the floor the
-//     fidelity contract pins. Uses os.availableParallelism when present.
+//     configured default. Uses os.availableParallelism when present.
 //
 // No top-level await.
 
 import os from "node:os";
 
-/** Default agent concurrency: min(16, max(2, cores - 2)). Byte-identical to the
- * monolith's `defaultConcurrency` / `i0p`. */
+/** Default agent concurrency: min(16, max(2, cores - 2)). */
 export function defaultConcurrency(): number {
   const cores = (typeof os.availableParallelism === "function" ? os.availableParallelism() : os.cpus().length) || 4;
   return Math.min(16, Math.max(2, cores - 2));
 }
 
-/** Shared async concurrency limiter (FIFO). Byte-identical to the monolith's
- * `Semaphore`: capacity floored at 1; acquire resolves now or queues; release
- * hands the freed slot to the head of the queue. */
+/** Shared FIFO limiter with capacity floored at one. */
 export class Semaphore {
   max: number;
   active: number;

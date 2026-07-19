@@ -1,9 +1,7 @@
 // FROZEN GOLDEN — source transform byte-identity.
 //
-// Locks the export-strip + async-IIFE wrap against the live monolith
-// (`/Users/tom/cmptr/bin/workflow` ~536-538). The async-IIFE framing is the
-// runtime contract (workflows use top-level await); the byte layout must match
-// exactly. Treat a failure as a P0 regression.
+// The async-IIFE framing lets workflows use top-level await. Its byte layout is
+// part of the runtime contract.
 
 import { describe, expect, it } from "bun:test";
 import { extractMetaObject } from "../../src/loader/meta.ts";
@@ -25,7 +23,7 @@ describe("transformSource (frozen)", () => {
     expect(transformSource(src, extracted)).toBe(`(async () => {\n// header\nconst meta = {a:1};\nx();\n})()`);
   });
 
-  it("matches the monolith splice formula exactly", () => {
+  it("applies the splice formula exactly", () => {
     const src = `export const meta = {phases:[{title:"P"}]};\nreturn 1;`;
     const extracted = extractMetaObject(src)!;
     const expected = src.slice(0, extracted.start) + "const meta" + src.slice(extracted.start + "export const meta".length);

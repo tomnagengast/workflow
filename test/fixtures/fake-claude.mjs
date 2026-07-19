@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Deterministic fake `claude` backend bin for tests + parity.
+// Deterministic fake `claude` backend for tests.
 //
 // Invoked by the claude backend as:
 //   claude -p PROMPT --output-format json [--model M] [extra --claude-arg ...]
@@ -9,13 +9,12 @@
 // on stdout, exit 0. The runner parses `result` as the agent text and
 // `usage.output_tokens` as the budget charge.
 //
-// Determinism (so resume / journal parity holds): the result echoes a stable
+// For stable resume and journal tests, the result echoes a fixed
 // summary of the prompt. When the prompt asks for JSON-matching-a-schema (the
 // gate path, or any agent() given a schema), it returns a valid GATE_SCHEMA-ish
 // object so tryParseJson + schemaOk succeed. output_tokens is a fixed constant.
 //
-// Shared `.mjs` (not `.ts`) so BOTH the node monolith and the Bun rewrite can
-// execute it for the Phase 4 journal-shape parity diff. No top-level await.
+// Shared `.mjs` lets source and compiled CLI tests execute the same fixture.
 
 import fs from "node:fs";
 import process from "node:process";

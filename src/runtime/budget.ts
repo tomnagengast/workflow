@@ -1,21 +1,16 @@
-// Token budget.
-//
-// Byte-faithful to the monolith (`/Users/tom/cmptr/bin/workflow` ~68,
-// ~521-529): `BudgetError` is the sentinel thrown when the token budget is
+// `BudgetError` is the sentinel thrown when the token budget is
 // exhausted (it propagates through parallel()/pipeline() instead of collapsing to
 // null). `makeBudget` builds the `budget` object exposed to the sandbox:
 // `{ total, spent(), remaining() }` where total === null means unlimited.
 //
-// The factory takes a getter for the live spent count so it tracks the runner's
-// running total exactly as the monolith's closure over `self.spent` did. No top-
-// level await.
+// The factory takes a getter so the sandbox reads the runner's live spent count.
 
 /** Thrown when the token budget is exhausted. Distinct so parallel()/pipeline()
  * can re-throw it (a budget kill is fatal) instead of swallowing it to null. */
 export class BudgetError extends Error {}
 
-/** The `budget` bag injected into the sandbox. Byte-identical shape to the
- * monolith's `makeBudget`: `total` (null = unlimited), `spent()` (live), and
+/** The `budget` bag injected into the sandbox: `total` (null = unlimited),
+ * `spent()` (live), and
  * `remaining()` (Infinity when unlimited, else max(0, total - spent)). */
 export interface Budget {
   total: number | null;

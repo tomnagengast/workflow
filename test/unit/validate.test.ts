@@ -1,4 +1,4 @@
-// Phase 6 — AST validator unit test.
+// AST validator unit tests.
 //
 // Exercises `validateSource` against the good/ and bad/ fixture corpora:
 //   - every file under test/fixtures/validate/good/ must validate clean,
@@ -6,10 +6,8 @@
 //     message matching the rejection class (meta-first / banned construct /
 //     parse error).
 //
-// The AST validator (acorn) replaces the monolith's regex heuristic; this test
-// pins the by-node-type rejections (Date.now() / Math.random() / argless
-// new Date()) and the wrap-tolerance for top-level return/await. No top-level
-// await.
+// These tests pin by-node-type rejections and wrap tolerance for top-level
+// return and await.
 
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
@@ -82,8 +80,7 @@ describe("validateSource — specifics", () => {
   });
 
   test("a computed member like Date['now']() is not flagged (only the literal call shape is banned)", () => {
-    // The monolith's regex only matched the literal `Date.now` token too; a
-    // computed access is a different node shape and was never caught. Preserve.
+    // Computed access is a different node shape and is not banned.
     const src = `export const meta = { name: "x" };\nconst f = Date["now"];\nf();`;
     expect(() => validateSource(src, "computed.js")).not.toThrow();
   });

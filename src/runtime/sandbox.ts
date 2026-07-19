@@ -1,9 +1,5 @@
-// vm sandbox.
-//
-// Byte-faithful to the monolith's two `vm.createContext({...})` bags (the
-// top-level `run` bag ~540-559 and the nested `runNested` bag ~677-687). Both
-// inject the SAME global surface; the only difference is `run` ends the journal
-// stream in a `finally`. This module centralizes:
+// Both top-level and nested workflows receive the same vm global surface. This
+// module centralizes:
 //   - `buildSandboxBag`: assemble the global object exposed to a workflow body
 //     (args, console, JSON, Math, Date — Math.random/Date present-but-parse-
 //     banned — budget, phase, log, agent, gate, parallel, pipeline, workflow,
@@ -30,8 +26,7 @@ export interface SandboxHooks {
   workflow: (nameOrSpec: unknown, nestedArgs?: unknown) => Promise<unknown>;
 }
 
-/** Build the global bag injected into the vm context. Byte-identical surface to
- * the monolith's `run`/`runNested` contexts. `gate` is unconditionally present. */
+/** Build the global bag injected into the vm context. */
 export function buildSandboxBag(hooks: SandboxHooks): Record<string, unknown> {
   return {
     args: hooks.args,
@@ -52,9 +47,7 @@ export function buildSandboxBag(hooks: SandboxHooks): Record<string, unknown> {
   };
 }
 
-/** createContext + runInContext the transformed (async-IIFE) source. Mirrors the
- * monolith's `vm.runInContext(wrapped, context, { filename, timeout })`. Returns
- * the IIFE's resolved value. */
+/** Run transformed source in a fresh context and return the IIFE result. */
 export function runInSandbox(
   wrapped: string,
   bag: Record<string, unknown>,

@@ -132,9 +132,7 @@ describe("resume --last", () => {
     // point the SAME run at the auto-journal we just wrote
     const second = await runCli([...RUN, "--resume-last"]);
     expect(second.code).toBe(0);
-    // identical workflow output. `spent` legitimately differs (cache hits short-
-    // circuit BEFORE token accounting, exactly as the monolith does on resume),
-    // so compare everything else.
+    // `spent` differs because cache hits short-circuit before token accounting.
     expect(withoutSpent(second.stdout)).toEqual(withoutSpent(first.stdout));
     expect(JSON.parse(second.stdout).spent).toBe(0);
     expect(JSON.parse(first.stdout).spent).toBeGreaterThan(0);

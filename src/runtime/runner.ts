@@ -1,8 +1,7 @@
 // WorkflowRunner — the execution heart.
 //
-// Byte-faithful to the monolith's `WorkflowRunner` (`/Users/tom/cmptr/bin/
-// workflow` ~505-690). Drives a workflow body in a vm sandbox against the agent
-// backends. Key contracts preserved exactly:
+// Drives a workflow body in a vm sandbox against the agent backends. Key
+// contracts:
 //   - shared Semaphore across ALL agent()/gate() calls (FIFO).
 //   - budget is a hard ceiling: an exhausted dispatch THROWS BudgetError (not
 //     null); a dead subagent (after retries) returns null (callers .filter(Boolean)).

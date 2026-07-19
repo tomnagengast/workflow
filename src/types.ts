@@ -1,6 +1,4 @@
-// Shared type skeleton for the workflow runner. Filled in as features land
-// across later phases (discovery, loader, runtime, journal). Phase 0 only needs
-// the CLI-surface shapes; Phase 2 adds discovery / catalog shapes.
+// Shared types for the workflow CLI and runtime.
 
 /** Parsed top-level CLI invocation: optional global --cwd, a command, and the
  * remaining args handed to that command's own parser. */
@@ -15,10 +13,8 @@ export interface RootInvocation {
  * nested `{ scriptPath }` reference. */
 export type WorkflowScope = "user" | "project" | "scriptPath";
 
-/** A discovered, meta-parsed workflow row. Matches the monolith's `parseWorkflow`
- * shape byte-for-byte so `list --json` / `show --json` stay parity-identical.
- * `meta` carries the raw evaluated meta literal verbatim (un-flattened), beside
- * the flattened convenience fields. */
+/** A discovered, meta-parsed workflow row. `meta` carries the raw evaluated
+ * literal beside the flattened convenience fields. */
 export interface WorkflowRow {
   name: string;
   path: string;
@@ -35,9 +31,7 @@ export interface WorkflowRow {
 /** The discovered catalog: workflow name -> row, later scopes shadowing earlier. */
 export type Catalog = Map<string, WorkflowRow>;
 
-/** Resolved run-time configuration, assembled by `cli/commands/run.ts` from the
- * parsed options. Mirrors the monolith's `runtime` object (`run` branch,
- * ~755-774) field-for-field so backend / runner behavior stays identical. */
+/** Resolved run-time configuration assembled by `cli/commands/run.ts`. */
 export interface Runtime {
   cwd: string;
   backend: string;

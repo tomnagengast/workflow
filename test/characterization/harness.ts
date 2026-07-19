@@ -1,25 +1,13 @@
-// Characterization harness — black-box CLI snapshotting against the live monolith.
+// Black-box CLI snapshot harness.
 //
-// Phase 5 locks the monolith's observable behavior as ground truth. This module
-// is the shared machinery: it builds a controlled fixture environment (temp HOME
-// carrying known `~/.claude/workflows`, a non-git temp cwd so project discovery
-// stays empty), spawns both the LIVE MONOLITH and the REWRITE under identical
-// conditions (NO_COLOR=1, controlled HOME/cwd, fake backend bins), redacts the
-// volatile temp-dir prefix to a stable placeholder, and reads/writes committed
-// snapshots.
+// This module builds a controlled fixture environment (temp HOME carrying known
+// `~/.claude/workflows`, a non-git temp cwd so project discovery stays empty),
+// runs the CLI with deterministic settings, redacts volatile temp paths, and
+// compares the result with committed snapshots. Set WF_UPDATE_SNAPSHOTS=1 to
+// accept an intentional CLI output change.
 //
-// Snapshots are generated FROM THE MONOLITH (the oracle): they depend only on the
-// monolith, not the rewrite. On first run — or when WF_UPDATE_SNAPSHOTS=1 — the
-// harness writes the monolith's redacted output to a committed file; on every run
-// it asserts the REWRITE's redacted output equals that committed snapshot. So a
-// passing test means rewrite-output == recorded-live-monolith-output.
-//
-// Engine-dependent surfaces (e.g. the V8-vs-JSC JSON.parse error text for an
-// invalid `--args`) are deliberately NOT snapshotted byte-for-byte here; the
-// monolith runs on node/V8 and the rewrite on Bun/JSC, so those strings diverge
-// by construction (same class of divergence the Phase 4 codex-parse fix handled).
-// Such cases are characterized structurally (exit code + banner + non-empty
-// error) by the test file, not by raw-byte snapshot.
+// Engine-dependent surfaces, such as JSON.parse error text, are checked
+// structurally instead of being snapshotted byte-for-byte.
 //
 // No top-level await: all spawning is async inside exported functions.
 
@@ -40,20 +28,13 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(here, "..", "..");
 export const CLI_PATH = path.join(REPO_ROOT, "src", "cli.ts");
-export const MONOLITH = "/Users/tom/cmptr/bin/workflow";
 export const FIXTURES = path.join(REPO_ROOT, "test", "fixtures");
 export const FAKE_CLAUDE = path.join(FIXTURES, "fake-claude.mjs");
 export const FAKE_CODEX = path.join(FIXTURES, "fake-codex.mjs");
 export const SNAPSHOT_DIR = path.join(here, "snapshots");
 
-/** Set WF_UPDATE_SNAPSHOTS=1 to (re)generate committed snapshots from the
- * monolith. Off in CI: the committed bytes are the contract. */
+/** Set WF_UPDATE_SNAPSHOTS=1 to accept the current CLI output as the contract. */
 export const UPDATE = process.env.WF_UPDATE_SNAPSHOTS === "1";
-
-/** Whether the live monolith oracle is present. When absent (e.g. CI without the
- * cmptr checkout) we skip oracle GENERATION but still assert the rewrite against
- * the committed snapshots — the committed bytes remain the contract. */
-export const HAS_MONOLITH = existsSync(MONOLITH);
 
 export interface RunResult {
   stdout: string;
@@ -118,13 +99,8 @@ async function spawn(
   return { stdout, stderr, code };
 }
 
-/** Run the LIVE MONOLITH (the oracle) with the controlled env. */
-export function runMonolith(env: FixtureEnv, args: string[]): Promise<RunResult> {
-  return spawn([MONOLITH, "--cwd", env.cwd, ...args], env);
-}
-
-/** Run the REWRITE CLI (`bun run src/cli.ts`) with the controlled env. */
-export function runRewrite(env: FixtureEnv, args: string[]): Promise<RunResult> {
+/** Run the CLI (`bun run src/cli.ts`) with the controlled env. */
+export function runCli(env: FixtureEnv, args: string[]): Promise<RunResult> {
   return spawn(["bun", "run", CLI_PATH, "--cwd", env.cwd, ...args], env);
 }
 
@@ -141,12 +117,10 @@ export function writeSnapshot(name: string, content: string): void {
 }
 
 /**
- * The core characterization assertion. For the given `name`:
- *  1. Run the monolith, redact, and — when UPDATE (or the snapshot is missing and
- *     the monolith is present) — record it as the committed snapshot.
- *  2. Run the rewrite, redact, and assert it equals the committed snapshot.
+ * Run the CLI, optionally update the named snapshot, and assert the current
+ * output matches the committed contract.
  *
- * `project` selects which redacted fields make up the snapshot body (default:
+ * `opts` selects which redacted fields make up the snapshot body (default:
  * stdout + exit code; stderr is opt-in because some commands' stderr is
  * order-nondeterministic — those pass `includeStderr:false` and check stderr
  * structurally in the test).
@@ -156,7 +130,7 @@ export async function characterize(
   name: string,
   args: string[],
   opts: { includeStdout?: boolean; includeStderr?: boolean } = {},
-): Promise<{ mono: RunResult | null; rewrite: RunResult }> {
+): Promise<RunResult> {
   const includeStdout = opts.includeStdout ?? true;
   const includeStderr = opts.includeStderr ?? false;
 
@@ -167,21 +141,16 @@ export async function characterize(
     return parts.join("\n") + "\n";
   };
 
-  let mono: RunResult | null = null;
-  if (UPDATE || (readSnapshot(name) === null && HAS_MONOLITH)) {
-    mono = await runMonolith(env, args);
-    writeSnapshot(name, render(mono));
-  }
+  const result = await runCli(env, args);
+  if (UPDATE) writeSnapshot(name, render(result));
 
   const snapshot = readSnapshot(name);
   if (snapshot === null) {
     throw new Error(
-      `No committed snapshot '${name}' and no monolith oracle at ${MONOLITH} to generate one. ` +
-        `Run with WF_UPDATE_SNAPSHOTS=1 on a machine that has the monolith.`,
+      `No committed snapshot '${name}'. Run with WF_UPDATE_SNAPSHOTS=1 to create it.`,
     );
   }
 
-  const rewrite = await runRewrite(env, args);
-  expect(render(rewrite)).toBe(snapshot);
-  return { mono, rewrite };
+  expect(render(result)).toBe(snapshot);
+  return result;
 }

@@ -1,10 +1,8 @@
-// Phase 5 — compat corpus gate.
+// Workflow corpus compatibility gate.
 //
-// Runs EVERY workflow file through the rewrite's validator + loader + meta and
-// records the ACCEPTED-NAME list as a committed snapshot. Phase 6 (the AST
-// validator) must keep this set as a SUBSET of what it accepts — i.e. the AST
-// accept-set ⊇ this snapshot — so swapping the regex heuristic for a real parse
-// never silently drops a workflow that loads today.
+// Runs every workflow file through validation and loading, then records the
+// accepted-name list as a committed snapshot. Future validator changes must
+// keep this set as a subset of what they accept.
 //
 // Two corpora:
 //

@@ -1,11 +1,4 @@
-// Loader validation — real AST parse (Phase 6).
-//
-// Ported in spirit from the monolith's `validateSource`
-// (`/Users/tom/cmptr/bin/workflow` ~219-243), whose own comment notes it is a
-// REGEX HEURISTIC of the binary's acorn-based loader checks. Phase 6 replaces
-// that heuristic with the real acorn parse the binary always used, catching the
-// same three classes of violation by AST node type instead of by scrubbed-string
-// token scan:
+// Loader validation with an acorn AST walk:
 //   - size cap (512 KiB),
 //   - first statement must be `export const meta = { ... }`
 //     (ExportNamedDeclaration → VariableDeclaration `const` → single declarator
@@ -13,28 +6,16 @@
 //   - banned non-deterministic constructs: `Date.now()` / `Math.random()` calls
 //     and argless `new Date()`.
 //
-// Why acorn (Q1 in the plan): `Bun.Transpiler.scan()` only surfaces
-// imports/exports — it cannot reject `Date.now`/`Math.random`/`new Date()` by
-// node type. The plan's documented last resort is acorn, the same parser the
-// original binary's loader used; it compiles + runs clean under
-// `bun build --compile --bytecode` (verified, Phase 6 gate). Keeping the
-// dependency surface minimal: acorn only, no acorn-walk (a tiny hand walk).
-//
-// Accept-set contract: this AST validator must remain a SUPERSET of the Phase 5
-// regex accept-set (test/compat asserts AST accept-set ⊇ snapshot). Error
-// messages are kept byte-identical to the monolith so characterization snapshots
-// that surface a validation error (none today) would still match.
-//
-// `list` / `show` do not call this (read-only); `run` (Phase 3) and the new
-// `validate` command (Phase 6) do. No top-level await.
+// `Bun.Transpiler.scan()` only surfaces imports and exports, so acorn is the one
+// runtime dependency. `list` and `show` remain read-only and do not validate.
 
 import { parse } from "acorn";
 import type { Node } from "acorn";
 
-/** 512 KiB source cap (`_$` / SOURCE_LIMIT in the original binary). */
+/** 512 KiB source cap. */
 export const SOURCE_LIMIT = 524288;
 
-/** A reusable banned-construct label (matches the monolith's strings). */
+/** Stable labels used in validation errors. */
 type BannedLabel = "Date.now()" | "Math.random()" | "argless new Date()";
 
 /** Minimal structural shapes for the AST nodes we inspect. acorn types nodes as
@@ -95,8 +76,7 @@ function collectBanned(program: AnyNode): BannedLabel[] {
   };
 
   visit(program);
-  // Preserve the monolith's banned-label ordering (Date.now, Math.random,
-  // argless new Date()) regardless of source order, so the error text matches.
+  // Keep error labels in a stable order regardless of source order.
   const order: BannedLabel[] = ["Date.now()", "Math.random()", "argless new Date()"];
   return order.filter((label) => found.has(label));
 }
@@ -114,9 +94,8 @@ function isMetaFirstStatement(stmt: AnyNode | undefined): boolean {
   return id?.type === "Identifier" && id.name === "meta" && init?.type === "ObjectExpression";
 }
 
-/** Throw a descriptive Error if the script violates the loader contract: too
- * large, not meta-first, or contains a banned non-deterministic construct. AST
- * parse replaces the monolith's regex heuristic; error messages are unchanged. */
+/** Throw when the script is too large, lacks a meta-first declaration, or uses
+ * a banned non-deterministic construct. */
 export function validateSource(script: string, filePath: string): void {
   if (Buffer.byteLength(script, "utf8") > SOURCE_LIMIT) {
     throw new Error(`Workflow ${filePath} exceeds ${SOURCE_LIMIT} bytes`);
@@ -126,13 +105,12 @@ export function validateSource(script: string, filePath: string): void {
   try {
     // The runtime drops the `export` keyword and wraps the whole body in an
     // `(async () => { … })()` IIFE before `vm.runInContext` (see
-    // loader/transform.ts + the monolith ~537/562). So a workflow body legally
+    // loader/transform.ts). A workflow body can therefore legally
     // contains top-level `return` and `await` even though the file keeps its
     // module-level `export const meta`. We parse the SAME shape the runtime runs:
     // `sourceType: "module"` to honor the `export`, plus return/await-outside-
-    // function tolerance to model the async-IIFE wrap. (The monolith's regex
-    // heuristic never parsed, so it tolerated these; a strict module parse would
-    // wrongly reject every real workflow on its first `return`.)
+    // function tolerance to model the async-IIFE wrap. A strict module parse
+    // would wrongly reject real workflows on their first `return`.
     program = parse(script, {
       ecmaVersion: "latest",
       sourceType: "module",

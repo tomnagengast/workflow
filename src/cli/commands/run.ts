@@ -1,8 +1,5 @@
-// `run` command.
-//
-// Byte-faithful to the monolith's run branch (`/Users/tom/cmptr/bin/workflow`
-// ~743-781) plus `loadArgs` (~286-290): parse the full preserved flag set,
-// resolve a catalog name or explicit workflow file, refuse a mutating workflow
+// `run` parses the full flag set, resolves a catalog name or explicit file,
+// refuses a mutating workflow
 // without --allow-mutating, reject an unknown backend, assemble the runtime
 // object, log the one-line "[workflow] backend=… concurrency=…" banner to
 // STDERR, run, then print the result to STDOUT (raw string, or pretty 2-space
@@ -25,8 +22,7 @@ import { resolveConfig } from "../../config/config.ts";
 
 const DEFAULT_SCHEMA_RETRIES = 2;
 
-/** Resolve a workflow's `--args JSON|@file` into a value. Byte-identical to the
- * monolith's `loadArgs`. */
+/** Resolve a workflow's `--args JSON|@file` into a value. */
 function loadArgs(raw: string | undefined): unknown {
   if (raw === undefined) return undefined;
   const text = raw.startsWith("@") ? readFileSync(path.resolve(raw.slice(1)), "utf8") : raw;
@@ -34,7 +30,7 @@ function loadArgs(raw: string | undefined): unknown {
 }
 
 /** Resolve which journal file to replay for resume. Precedence: an explicit
- * `--resume FILE` (absolutized, exactly as the monolith did) wins; otherwise
+ * `--resume FILE` wins; otherwise
  * `--resume-last` resolves the newest auto-journal in the state dir; otherwise
  * no resume (null). */
 function resolveResumeFile(opts: ParsedOptions): string | null {
@@ -55,9 +51,7 @@ export async function run(workflows: Catalog, cwd: string, args: string[]): Prom
   if (workflow.mutating && !opts.allowMutating) {
     throw new Error(`Refusing to run mutating workflow '${workflow.name}' without --allow-mutating.`);
   }
-  // Defaults layer (Phase 7): the resolved user config sits UNDER flags. With
-  // no config file, `cfg` equals the monolith's hardcoded defaults, so every
-  // `?? cfg.x` below reduces to the old literal — byte-compat preserved.
+  // Explicit flags override user config, which overrides built-in defaults.
   const { config: cfg } = resolveConfig();
 
   const backend = (opts.backend as string) || cfg.backend;

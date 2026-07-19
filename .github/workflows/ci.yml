@@ -5,14 +5,10 @@ on:
     branches: ["**"]
   pull_request:
 
-# Phase 1 lands the `vm-compile` smoke job — THE GATE. It continuously
-# validates the load-bearing assumption: `node:vm` works inside a
-# `bun build --compile --bytecode` binary. Phase 2 adds the `checks` job
-# (typecheck + bun test + CLI smoke + list/show JSON-shape parity). Phase 9
-# adds `context:check` to `checks` and the `release-dry-run` job — the
-# pre-publish signing / Gatekeeper rung that builds all 4 targets, ad-hoc signs
-# the darwin artifact, and launch-tests it (assert NOT exit 137) WITHOUT
-# publishing. Only the tap push stays release-gated (.github/workflows/release.yml).
+# The vm-compile smoke validates that `node:vm` works inside a
+# `bun build --compile --bytecode` binary. The checks job covers types, tests,
+# agent context, and CLI smoke. The release dry run builds all four targets,
+# signs the Darwin artifacts, and launch-tests them without publishing.
 jobs:
   vm-compile:
     name: vm-compile smoke (the gate)
@@ -42,10 +38,7 @@ jobs:
       - name: typecheck
         run: bun run typecheck
       - name: test
-        # Covers the list/show discovery slice incl. the `list --json` raw-meta
-        # shape parity (test/integration/list-show.test.ts) — the committable,
-        # monolith-free stand-in for the live-monolith diff (Phase 5 adds the
-        # characterization snapshots).
+        # Covers unit, integration, characterization, and workflow-corpus tests.
         run: bun test
       - name: context:check (agent-doc drift)
         run: bun run context:check

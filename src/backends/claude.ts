@@ -1,7 +1,4 @@
-// claude backend.
-//
-// Byte-faithful to the monolith's `claudeBackend`
-// (`/Users/tom/cmptr/bin/workflow` ~387-414): shell out to `claude -p PROMPT
+// Shell out to `claude -p PROMPT
 // --output-format json` (+ optional --model, --dangerously-skip-permissions,
 // extra --claude-arg). Parse the JSON envelope: `result` is the text, `usage.
 // output_tokens` the token count. With a schema, retry up to `schemaRetries + 1`
@@ -15,7 +12,7 @@ import type { BackendResult, Runtime } from "../types.ts";
 import { tryParseJson, schemaOk } from "../schema/validate.ts";
 import { spawnAsync } from "./spawn.ts";
 
-/** Run the claude backend. Byte-identical to the monolith's `claudeBackend`. */
+/** Run the claude backend. */
 export async function claudeBackend(prompt: string, schema: unknown, rt: Runtime): Promise<BackendResult> {
   const attempts = schema ? rt.schemaRetries + 1 : 1;
   let lastErr: Error | null = null;

@@ -1,8 +1,5 @@
-// Meta extraction + evaluation.
-//
-// Ported verbatim from the monolith (`/Users/tom/cmptr/bin/workflow`
-// ~187-216, 245-262): find the `export const meta` object literal by brace
-// matching (quote/escape aware), then evaluate it in an EMPTY node:vm context so
+// Find the `export const meta` object literal by quote-aware brace matching,
+// then evaluate it in an empty node:vm context so
 // the author's literal (which may use trailing commas, template strings, etc.)
 // becomes a real object without executing any workflow body.
 //
@@ -22,8 +19,7 @@ export interface ExtractedMeta {
 }
 
 /** Locate the `export const meta = { ... }` object literal by brace matching,
- * ignoring braces inside strings/templates. Returns null if absent. Byte-faithful
- * to the monolith's `extractMetaObject`. */
+ * ignoring braces inside strings and templates. Returns null if absent. */
 export function extractMetaObject(text: string): ExtractedMeta | null {
   const marker = "export const meta";
   const start = text.indexOf(marker);
@@ -55,19 +51,16 @@ export function extractMetaObject(text: string): ExtractedMeta | null {
   return null;
 }
 
-/** Evaluate the extracted meta literal in a fresh empty vm context. Mirrors the
- * monolith's `vm.runInContext("(" + metaSrc + ")", emptyContext, { filename })`. */
+/** Evaluate the extracted meta literal in a fresh empty vm context. */
 function evalMeta(metaSrc: string, filePath: string): Record<string, unknown> {
   const context = vm.createContext({});
   return vm.runInContext(`(${metaSrc})`, context, { filename: filePath }) as Record<string, unknown>;
 }
 
-/** Parse a workflow file into a discovery row. Byte-faithful to the monolith's
- * `parseWorkflow`: synthesize a default meta when no literal is present, flatten
+/** Parse a workflow file into a discovery row: synthesize a default meta when
+ * no literal is present, flatten
  * name/description/phases for display, derive `mutating` from a raw whole-file
- * substring scan, and carry the raw evaluated `meta` verbatim. Reads the file
- * synchronously (node:fs), matching the monolith and keeping the discovery path
- * free of any await. */
+ * substring scan, and carry the raw evaluated `meta` verbatim. */
 export function parseWorkflow(filePath: string, scope: WorkflowScope): WorkflowRow {
   return parseWorkflowFromSource(readFileSync(filePath, "utf8"), filePath, scope);
 }

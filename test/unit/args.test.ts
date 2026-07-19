@@ -1,8 +1,6 @@
 // FROZEN GOLDEN — parseOptions arg-parser table.
 //
-// Locks the two load-bearing semantics util.parseArgs would silently break
-// (`/Users/tom/cmptr/bin/workflow` ~129-156, and the plan's frozen arg-parser
-// note):
+// Locks two semantics util.parseArgs would silently break:
 //   1. Unknown-flag tolerance: `spec[key] || "boolean"` accepts any unknown
 //      `--flag` as boolean, never throwing "Unknown option".
 //   2. Option-like value consumption: `argv[++i]` consumes the NEXT token as the

@@ -1,19 +1,10 @@
-// Config layer (Phase 7) — `flags > user > defaults`.
+// Config layer: `flags > user > defaults`.
 //
-// The monolith has NO config file: every run default is hardcoded (backend
-// "claude", bins "claude"/"codex", concurrency = defaultConcurrency(), budget
-// null, model undefined). Phase 7 adds a single OPTIONAL user layer between
-// those baked-in defaults and the per-run flags:
+// A single optional user layer sits between built-in defaults and per-run flags:
 //
 //     flags  >  user config  >  defaults
 //
-// HARD COMPAT INVARIANT: with NO config file present and NO flags passed, the
-// resolved values MUST equal the monolith's hardcoded defaults exactly, so a
-// stock environment stays byte-identical to today. The config file is purely
-// additive — it only moves the *defaults* a `run` falls back to when a flag is
-// absent.
-//
-// Format (Open question 2 → plan default): TOML at
+// The user file is TOML at
 // `~/.config/workflow/config.toml`, parsed with the built-in `Bun.TOML`. Two
 // layers only (no per-repo `.workflow.toml` until a real need appears).
 //
@@ -30,12 +21,12 @@ import { defaultConcurrency } from "../runtime/concurrency.ts";
  * `--codex-bin`) so config is a 1:1 default for them. */
 export interface WorkflowConfig {
   backend: string;
-  /** undefined = no model override (matches the monolith's `model` default). */
+  /** undefined = no model override. */
   model: string | undefined;
   /** Resolved concurrency. The default is environment-derived
    * (defaultConcurrency()); a config value overrides it only when > 0. */
   concurrency: number;
-  /** null = no budget ceiling (matches the monolith). */
+  /** null = no budget ceiling. */
   budget: number | null;
   claudeBin: string;
   codexBin: string;
@@ -54,9 +45,7 @@ export interface ResolvedConfig {
   loaded: boolean;
 }
 
-/** The baked-in defaults — byte-identical to the monolith's hardcoded run
- * defaults. `concurrency` is computed per-environment, exactly as the run
- * branch does when `--concurrency` is absent. */
+/** Built-in defaults. Concurrency is computed per environment. */
 export function defaults(): WorkflowConfig {
   return {
     backend: "claude",

@@ -1,7 +1,5 @@
-// Terminal rendering helpers.
-//
-// Byte-faithful to the monolith (`/Users/tom/cmptr/bin/workflow` ~31-33,
-// ~294-331): `paint` colorizes for stdout via node:util `styleText`, which
+// Terminal rendering helpers. `paint` colorizes stdout via node:util
+// `styleText`, which
 // auto-strips styling when stdout is not a TTY (piped/redirected) or when
 // NO_COLOR is set; `wrapText` word-wraps to a column width (no-op when width is
 // unknown); `printTable` renders the `list` view. No top-level await.
@@ -12,8 +10,8 @@ import type { Catalog } from "../types.ts";
 /** Whether stdout should be colorized, matching node's `styleText({ stream })`
  * gating. Bun's `node:util styleText` does NOT honor NO_COLOR or the non-TTY
  * stream check (it always emits ANSI as of Bun 1.3.11), so we replicate node's
- * decision ourselves and skip styleText when color is off — otherwise piped /
- * NO_COLOR output diverges from the monolith. Node's precedence: FORCE_COLOR
+ * decision ourselves and skip styleText when color is off. Node's precedence:
+ * FORCE_COLOR
  * (any value, even "0" enables level 1 in node's tty.hasColors? — node treats
  * FORCE_COLOR set to "" / "1"/"2"/"3" as on and "0"/"false" as off) overrides
  * NO_COLOR; otherwise NO_COLOR disables; otherwise require a TTY. */
@@ -27,14 +25,11 @@ function colorEnabled(): boolean {
   return Boolean(process.stdout.isTTY);
 }
 
-/** Colorize `text` for stdout, matching the monolith's `paint`. Returns the raw
- * text when color is disabled (piped / NO_COLOR / no FORCE_COLOR), so output
- * stays byte-identical to the node monolith in pipes. */
+/** Colorize `text` for stdout. Returns the raw text when color is disabled. */
 export function paint(style: string | string[], text: string): string {
   if (!colorEnabled()) return text;
-  // node:util styleText's format-name type is a finite union; the monolith passes
-  // both single names and arrays of names. Cast at the boundary to keep the
-  // call-sites ergonomic while staying byte-identical at runtime.
+  // Cast at the boundary because styleText accepts a finite union while callers
+  // use both single names and arrays.
   return styleText(style as Parameters<typeof styleText>[0], text, { stream: process.stdout });
 }
 
@@ -56,9 +51,7 @@ export function wrapText(text: string, width: number): string[] {
   return lines;
 }
 
-/** Render the `list` table to stdout. Byte-faithful to the monolith's
- * `printTable`: name + mutating badge, scope · phases meta line, wrapped
- * description, blank separator. */
+/** Render the `list` table to stdout. */
 export function printTable(workflows: Catalog): void {
   const rows = Array.from(workflows.values()).sort((a, b) => a.name.localeCompare(b.name));
   const indent = "  ";

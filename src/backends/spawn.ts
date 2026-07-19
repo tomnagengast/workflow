@@ -1,14 +1,11 @@
-// Async process spawn.
-//
-// Byte-faithful to the monolith's `spawnAsync` (`/Users/tom/cmptr/bin/workflow`
-// ~365-384): spawn a child, capture stdout/stderr, and resolve (NEVER reject)
+// Spawn a child, capture stdout/stderr, and resolve (never reject)
 // with `{ error, status, stdout, stderr }`. A spawn-time throw, an `error` event,
 // and a clean `close` all map onto the same resolved shape so backends can decide
 // what to do. In verbose mode stdout is also teed to our stderr and the child's
 // stderr inherits our stderr (so it streams live, hence `stderr` stays "").
 //
-// Uses node:child_process (supported under Bun) to keep the never-reject + tee
-// semantics byte-identical. No top-level await.
+// Uses node:child_process under Bun to preserve the never-reject and tee
+// semantics.
 
 import { spawn } from "node:child_process";
 
@@ -21,8 +18,7 @@ export interface SpawnResult {
   stderr: string;
 }
 
-/** Spawn `bin args`, capture output, resolve (never reject). Byte-identical to
- * the monolith's `spawnAsync`. */
+/** Spawn `bin args`, capture output, and resolve without rejecting. */
 export function spawnAsync(
   bin: string,
   args: string[],

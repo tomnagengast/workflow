@@ -1,22 +1,10 @@
 // FROZEN GOLDEN — agentKey byte-identity.
 //
-// Locks the v2:sha256 cache/journal key. These hashes were computed from the live
-// monolith's `agentKey` algorithm (`/Users/tom/cmptr/bin/workflow` ~497-503). If
-// any of them changes, resume + journal portability silently breaks — treat a
-// failure here as a P0 regression, not a snapshot to bless.
+// Locks the v2:sha256 cache and journal key. A change breaks resume and journal
+// portability, so treat a failure as a P0 regression.
 
 import { describe, expect, it } from "bun:test";
-import crypto from "node:crypto";
 import { agentKey } from "../../src/runtime/agentKey.ts";
-
-// Reference implementation transcribed from the monolith, used to cross-check.
-function monolithAgentKey(prompt: string, opts: Record<string, unknown>): string {
-  const norm: Record<string, unknown> = {};
-  for (const k of ["schema", "label", "phase", "model", "effort", "agentType", "isolation"]) {
-    if (opts[k] !== undefined) norm[k] = opts[k];
-  }
-  return "v2:" + crypto.createHash("sha256").update(JSON.stringify({ prompt, opts: norm })).digest("hex");
-}
 
 describe("agentKey (frozen v2:sha256)", () => {
   it("matches locked hash with empty opts", () => {
@@ -38,15 +26,23 @@ describe("agentKey (frozen v2:sha256)", () => {
     expect(agentKey("p", { ...base, backend: "claude" })).toBe(agentKey("p", { ...base, backend: "codex" }));
   });
 
-  it("cross-checks the monolith reference impl across varied opts", () => {
-    const cases: Array<[string, Record<string, unknown>]> = [
-      ["", {}],
-      ["a", { label: "L" }],
-      ["b", { schema: { type: "array", required: ["x", "y"] }, model: "z", effort: "low" }],
-      ["c", { isolation: "worktree", agentType: "reviewer", phase: "Gate", backend: "codex", junk: 1 }],
+  it("locks hashes across varied optional fields", () => {
+    const cases: Array<[string, Record<string, unknown>, string]> = [
+      ["", {}, "v2:5970e2adaade7045f993df0c46c5e7a038edf033a4885994d85a68421d038e6d"],
+      ["a", { label: "L" }, "v2:89147b236174254202c02392491231d516f391f98af1a144f67a3747e1de1842"],
+      [
+        "b",
+        { schema: { type: "array", required: ["x", "y"] }, model: "z", effort: "low" },
+        "v2:1381a23091cfc4c6615a0b1988da2c3608579e0834a5cb55f50b97431453f5d7",
+      ],
+      [
+        "c",
+        { isolation: "worktree", agentType: "reviewer", phase: "Gate", backend: "codex", junk: 1 },
+        "v2:b91629b232fb14ac1ec9bbde1bd5af0368ed6acb6f03ee1df1681cb72c3ee313",
+      ],
     ];
-    for (const [prompt, opts] of cases) {
-      expect(agentKey(prompt, opts)).toBe(monolithAgentKey(prompt, opts));
+    for (const [prompt, opts, expected] of cases) {
+      expect(agentKey(prompt, opts)).toBe(expected);
     }
   });
 });

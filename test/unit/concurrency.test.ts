@@ -1,8 +1,4 @@
-// Unit — Semaphore FIFO + cap, and defaultConcurrency floor.
-//
-// Mirrors the monolith's `Semaphore` (`/Users/tom/cmptr/bin/workflow` ~45-66)
-// and `defaultConcurrency` (~39-42): capacity floored at 1, FIFO release order,
-// and the min(16, max(2, cores-2)) floor.
+// Semaphore capacity, FIFO release order, and default concurrency floor.
 
 import { describe, expect, it } from "bun:test";
 import { Semaphore, defaultConcurrency } from "../../src/runtime/concurrency.ts";

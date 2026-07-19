@@ -1,6 +1,4 @@
-// Structured-output helpers.
-//
-// Byte-faithful to the monolith (`/Users/tom/cmptr/bin/workflow` ~333-362):
+// Structured-output helpers:
 //   - `tryParseJson`: pull the first JSON value out of an agent reply. Prefer a
 //     ```json fenced``` block, else the raw text; find the first `{` or `[`
 //     (whichever comes first), then trim trailing junk one char at a time until
@@ -10,8 +8,7 @@
 //
 // No top-level await.
 
-/** Extract the first parseable JSON value from agent text. Byte-identical to the
- * monolith's `tryParseJson`. Returns null when nothing parses. */
+/** Extract the first parseable JSON value from agent text. */
 export function tryParseJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced ? fenced[1]! : text;
@@ -29,8 +26,7 @@ export function tryParseJson(text: string): unknown {
   return null;
 }
 
-/** Light top-level type + required-keys check. Byte-identical to the monolith's
- * `schemaOk`. Returns true for a non-object/absent schema. */
+/** Light top-level type and required-keys check. */
 export function schemaOk(value: unknown, schema: unknown): boolean {
   if (!schema || typeof schema !== "object") return true;
   const s = schema as { type?: unknown; required?: unknown };

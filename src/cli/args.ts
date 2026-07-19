@@ -1,20 +1,16 @@
-// Argument parsing.
+// Argument parsing has two layers:
 //
-// Two parsers, both faithful to the monolith (`/Users/tom/cmptr/bin/workflow`):
-//
-// 1. `parseArgv` (~103-127): the global pre-split. Consumes `-h`/`--help`,
+// 1. `parseArgv`: the global pre-split. Consumes `-h`/`--help`,
 //    `-v`/`--version`, and `--cwd`/`--cwd=`, then the first non-flag token is the
-//    command and the rest are its args. (`--version` is a Phase 0 add; the
-//    monolith only had help + cwd, but the routing shape is the same.)
+//    command and the rest are its args.
 //
-// 2. `parseOptions` (~129-156): the FROZEN per-command parser. Two load-bearing
-//    semantics must stay byte-identical (a golden table lands in Phase 3):
+// 2. `parseOptions`: the FROZEN per-command parser. Two semantics are locked by
+//    golden tests:
 //      - Unknown-flag tolerance: `spec[key] || "boolean"` accepts any unknown
 //        `--flag` as boolean, never errors.
 //      - Option-like value consumption: `argv[++i]` consumes the next token as
 //        the value even if it looks like an option.
-//    Do NOT swap in `util.parseArgs` — it breaks both. See the plan's frozen
-//    arg-parser note.
+//    Do not swap in `util.parseArgs`; it breaks both.
 //
 // No top-level await.
 
@@ -62,8 +58,8 @@ export function parseArgv(argv: string[]): RootInvocation {
   return root;
 }
 
-/** FROZEN per-command option parser. Byte-faithful to the monolith's
- * `parseOptions`. Unknown flags are boolean; option-like values are consumed. */
+/** FROZEN per-command option parser. Unknown flags are boolean; option-like
+ * values are consumed. */
 export function parseOptions(argv: string[], spec: OptionSpec = {}): ParsedOptions {
   const opts: ParsedOptions = { _: [] };
   for (let i = 0; i < argv.length; i += 1) {

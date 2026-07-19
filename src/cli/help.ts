@@ -1,8 +1,4 @@
-// Usage / help text.
-//
-// Byte-faithful to the monolith's `usage()` (`/Users/tom/cmptr/bin/workflow`
-// ~70-101). Kept as a single constant so the `--help` smoke and the monolith
-// characterization snapshot (Phase 5) can diff it directly. No top-level await.
+// Frozen usage text locked by the characterization snapshot.
 
 export const USAGE = `Usage: workflow [--cwd DIR] <command> [options]
 

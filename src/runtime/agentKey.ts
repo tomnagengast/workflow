@@ -1,9 +1,7 @@
 // FROZEN MODULE — agentKey (v2:sha256).
 //
-// Byte-faithful to the monolith's `agentKey` (`/Users/tom/cmptr/bin/workflow`
-// ~497-503). The returned key is the cache / journal identity for an agent() or
-// gate() dispatch; resume and journal portability depend on it being BYTE-STABLE,
-// so this MUST stay identical to the monolith forever:
+// The returned key is the cache and journal identity for an agent() or gate()
+// dispatch. Resume and journal portability require it to remain byte-stable:
 //   - whitelist of opt keys (in this exact order): schema, label, phase, model,
 //     effort, agentType, isolation. `backend` is deliberately EXCLUDED.
 //   - only present (!== undefined) keys are copied into `norm`.
@@ -14,12 +12,11 @@
 
 import crypto from "node:crypto";
 
-/** The whitelisted opt keys, in monolith order. `backend` is intentionally NOT
+/** Whitelisted option keys in hash order. `backend` is intentionally not
  * here — two backends running the same framed prompt+opts share a cache key. */
 const KEY_FIELDS = ["schema", "label", "phase", "model", "effort", "agentType", "isolation"] as const;
 
-/** Compute the v2 cache/journal key for a framed prompt + opts. Byte-identical
- * to the monolith. */
+/** Compute the v2 cache and journal key for a framed prompt and options. */
 export function agentKey(prompt: string, opts: Record<string, unknown>): string {
   const norm: Record<string, unknown> = {};
   for (const k of KEY_FIELDS) {

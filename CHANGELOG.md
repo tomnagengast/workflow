@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Removed the external test dependency. The public CLI and its committed
+  snapshots and golden tests now define the full contract.
+
 ## [0.0.4] - 2026-07-18
 
 ### Added
@@ -35,34 +40,31 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.0.1] - 2026-06-24
 
-First release of the Bun + TypeScript rewrite of the standalone workflow runner,
+First release of the Bun + TypeScript standalone workflow runner,
 distributed as prebuilt single-file binaries through a Homebrew tap.
 
 ### Added
 
-- Repo skeleton for the Bun + TypeScript rewrite: build/lang config, CLI
+- Repo skeleton for the Bun + TypeScript CLI: build/lang config, CLI
   entrypoint stub, agent-readiness floor (`AGENTS.md`, `CLAUDE.md` shim,
   `docs/agents/`, `dev/agent/` wrappers, `context:check`), and starter docs.
-- `workflow --version` / `-v` — prints the version (genuinely missing from the
-  legacy runner).
+- `workflow --version` / `-v` — prints the version.
 - `workflow list` / `workflow show <name>` — real read-only discovery against
   `~/.claude/workflows` + project `.claude/workflows`, with scope shadowing and
-  meta-first parsing. `--json` carries the raw, un-flattened `meta` verbatim,
-  byte-identical to the legacy runner.
+  meta-first parsing. `--json` carries the raw, un-flattened `meta` verbatim.
 - `workflow run <name>` — execute a workflow end-to-end in a `node:vm` sandbox
   against the `claude` / `codex` agent backends. Full `agent` / `gate` /
   `parallel` / `pipeline` / `phase` / `budget` / nested `workflow()` dispatch,
   the shared FIFO concurrency limiter, the resume cache, and the started/result
-  journal — preserved byte-for-byte from the legacy runner. Frozen modules
+  journal. Frozen modules
   (`agentKey` `v2:` hash, the prompt builders + `GATE_SCHEMA`, the
   export-strip/async-IIFE transform, the `parseOptions` table) are locked by
   golden tests. `gate()` always runs on the opposite backend and is always
   injected into the sandbox (top-level and nested).
 - `workflow run --journal <file>` / `--resume <file>` — the started/result jsonl
-  writer is now a frozen `journal/journal.ts` module (byte-identical event shapes,
+  writer is a frozen `journal/journal.ts` module with byte-stable event shapes,
   append mode), locked by a golden-bytes test. `--resume` replays a prior
-  journal's non-null results from cache without re-dispatching. Shape parity vs
-  the legacy runner is self-generated and asserted.
+  journal's non-null results from cache without re-dispatching.
 - Homebrew release pipeline (`.github/workflows/release.yml`): a `v*.*.*` tag
   cross-compiles four single-file binaries (`darwin-arm64`, Intel-baseline
   `darwin-x64`, `linux-x64`, `linux-arm64`) from one host, ad-hoc codesigns the
@@ -73,7 +75,7 @@ distributed as prebuilt single-file binaries through a Homebrew tap.
   (`release-dry-run` CI job) so a SIGKILL (exit 137) or broken cross-compile is
   caught without cutting a release. Maintainer guide: `docs/release.md`.
 - `workflow validate <name|path>` — standalone loader validation backed by a real
-  AST parse (replacing the legacy regex heuristic): asserts `export const meta`
+  AST parse: asserts `export const meta`
   is the first statement and a literal, rejects `Date.now()` / `Math.random()` /
   argless `new Date()` by node type, and enforces the 512 KiB source cap.
 - `workflow doctor` — environment diagnostics: backend (`claude` / `codex`)
