@@ -5,6 +5,7 @@ export const USAGE = `Usage: workflow [--cwd DIR] <command> [options]
 Commands:
   list [--json]                         List resolved workflows
   show <name> [--json]                  Show workflow metadata
+  validate <name|path> [--json]         Validate workflow source without running it
   run <name> [--args JSON|@file]        Run a workflow against real subagents
 
 Run options:

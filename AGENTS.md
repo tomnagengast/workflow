@@ -13,7 +13,7 @@ implementation distributed as a single compiled binary via a Homebrew tap.
 - `src/types.ts` — shared type skeleton, grown as features land.
 - `src/cli/` — arg parsing (frozen `parseOptions`), help text, terminal
   rendering, and `commands/{list,show,run,validate,doctor}`. `validate` and
-  `doctor` are read-only diagnostics not included in the frozen `--help` text.
+  `doctor` are read-only diagnostics.
 - `src/discovery/` — `catalog` (workflow dirs + git repo root + shadowing),
   `resolve` (`NAME_RE` + `requireWorkflow`), and `target` (explicit workflow
   file resolution independent of the agent working directory).
