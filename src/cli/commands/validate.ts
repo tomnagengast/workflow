@@ -17,29 +17,19 @@
 // and exit 1. `--json` emits `{ valid, name, path, error? }` to stdout and still
 // exits 1 when invalid. No top-level await.
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Catalog } from "../../types.ts";
 import { parseOptions } from "../args.ts";
 import { requireWorkflow } from "../../discovery/resolve.ts";
+import { workflowFilePath } from "../../discovery/target.ts";
 import { validateSource } from "../../loader/validate.ts";
-
-/** Does this positional look like a filesystem path rather than a bare name?
- * True when it exists as a file, or carries a path separator, or ends in `.js`. */
-function looksLikePath(target: string): boolean {
-  if (target.includes("/") || target.includes(path.sep)) return true;
-  if (target.endsWith(".js")) return true;
-  return existsSync(target) && statSync(target).isFile();
-}
 
 /** Resolve the positional to an absolute file path + display name. */
 function resolveTarget(workflows: Catalog, target: string): { name: string; path: string } {
-  if (looksLikePath(target)) {
-    const abs = path.resolve(target);
-    if (!existsSync(abs) || !statSync(abs).isFile()) {
-      throw new Error(`Workflow file not found: ${abs}`);
-    }
-    return { name: path.basename(abs, ".js"), path: abs };
+  const file = workflowFilePath(target);
+  if (file) {
+    return { name: path.basename(file, ".js"), path: file };
   }
   const workflow = requireWorkflow(workflows, target);
   return { name: workflow.name, path: workflow.path };

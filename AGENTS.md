@@ -16,8 +16,9 @@ distributed as a single compiled binary via a Homebrew tap.
   rendering, and `commands/{list,show,run,validate,doctor}` (more land in later
   phases). `validate`/`doctor` are read-only diagnostics (not in the frozen
   `--help` USAGE, which mirrors the monolith).
-- `src/discovery/` — `catalog` (workflow dirs + git repo root + shadowing) and
-  `resolve` (`NAME_RE` + `requireWorkflow`).
+- `src/discovery/` — `catalog` (workflow dirs + git repo root + shadowing),
+  `resolve` (`NAME_RE` + `requireWorkflow`), and `target` (explicit workflow
+  file resolution independent of the agent working directory).
 - `src/loader/` — `meta` (extract + vm-eval the `meta` literal), `validate`
   (size / meta-first / banned-construct check via a real acorn AST walk — the
   one runtime dependency; parses with return/await tolerance to model the

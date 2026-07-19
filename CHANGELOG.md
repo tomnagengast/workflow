@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `workflow run` accepts an explicit workflow file while `--cwd` independently
+  controls the working directory used by agent backends.
+
 ## [0.0.3] - 2026-07-18
 
 ### Fixed

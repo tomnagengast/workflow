@@ -16,13 +16,26 @@ workflow [--cwd DIR] <command> [options]
 
 - `list [--json]` — list resolved workflows.
 - `show <name> [--json]` — show a workflow's metadata.
-- `run <name> [--args JSON|@file]` — run a workflow against real subagents.
+- `run <name|path> [--args JSON|@file]` — run a discovered workflow or an
+  explicit workflow file against real subagents.
 - `resume --last <name> [run options]` — replay the most recent run of `<name>`
   (sugar for `run <name> --resume-last`).
 
 Run `workflow --help` for the full, current option set (backend, concurrency,
 budget, journaling, and backend-specific flags). This document tracks that help
 text as each command is implemented.
+
+## Explicit workflow files
+
+`run` accepts an explicit workflow file without adding it to a discovery root:
+
+```sh
+workflow --cwd /path/to/project run /path/to/workflow.js
+```
+
+The file supplies the workflow source and metadata. `--cwd` remains the working
+directory for Claude Code or Codex, so the workflow can live outside the project
+it operates on. Relative workflow paths resolve from the invoking shell.
 
 ## Journaling & resume
 

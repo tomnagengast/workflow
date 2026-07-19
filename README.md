@@ -12,6 +12,7 @@ standalone CLI, dispatching to real `claude` or `codex` backends.
 ```
 $ workflow list
 $ workflow run adversarial-pr-gate --args '{"diff":"git diff HEAD~1 HEAD"}'
+$ workflow --cwd /path/to/project run /path/to/workflow.js
 ```
 
 ## Who it's for

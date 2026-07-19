@@ -24,6 +24,12 @@ workflow list
 workflow run <name> --args '{"key":"value"}'
 ```
 
+You can also run a file that lives outside the target project:
+
+```sh
+workflow --cwd /path/to/project run /path/to/workflow.js
+```
+
 `run` dispatches to a real `claude` (default) or `codex` backend, so the relevant
 CLI must be installed and on your `PATH`. See [usage.md](usage.md) for the full
 option set.

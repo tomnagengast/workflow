@@ -7,7 +7,7 @@
 // nested workflow(), budget accounting, and the stdout/stderr split.
 
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -104,6 +104,41 @@ describe("run guards", () => {
     ]);
     expect(code).toBe(0);
     expect(stdout.trim()).toBe("fake-claude: mutate the repo");
+  });
+});
+
+describe("run explicit workflow file", () => {
+  it("loads the file outside --cwd while agents run from --cwd", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "workflow-explicit-file-"));
+    try {
+      const project = path.join(dir, "project");
+      const capture = path.join(dir, "codex-args.jsonl");
+      const source = path.join(RUN_HOME, ".claude", "workflows", "mutator.js");
+      mkdirSync(project);
+
+      const { code, stdout } = await runCli(
+        [
+          "--cwd", project, "run", source,
+          "--backend", "codex", "--codex-bin", FAKE_CODEX, "--allow-mutating",
+        ],
+        { WORKFLOW_TEST_CODEX_ARGS: capture },
+      );
+
+      expect(code).toBe(0);
+      expect(stdout.trim()).toBe("fake-codex: mutate the repo");
+      const args = capturedArgs(capture)[0]!;
+      expect(args.slice(args.indexOf("--cd"), args.indexOf("--cd") + 2)).toEqual(["--cd", project]);
+      expect(existsSync(path.join(project, ".claude"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a missing explicit workflow file", async () => {
+    const missing = path.join(tmpdir(), "missing-explicit-workflow.js");
+    const { code, stderr } = await runCli(["run", missing]);
+    expect(code).toBe(1);
+    expect(stderr).toContain(`Workflow file not found: ${missing}`);
   });
 });
 

@@ -10,9 +10,9 @@ export interface RootInvocation {
   args: string[];
 }
 
-/** Where a discovered workflow came from. `user` = ~/.claude/workflows,
- * `project` = a repo `.claude/workflows`, `scriptPath` = an explicit nested
- * `{ scriptPath }` reference (introduced by the runtime in a later phase). */
+/** Where a workflow came from. `user` = ~/.claude/workflows, `project` = a
+ * repo `.claude/workflows`, `scriptPath` = an explicit CLI file target or
+ * nested `{ scriptPath }` reference. */
 export type WorkflowScope = "user" | "project" | "scriptPath";
 
 /** A discovered, meta-parsed workflow row. Matches the monolith's `parseWorkflow`

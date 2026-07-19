@@ -2,10 +2,11 @@
 //
 // Byte-faithful to the monolith's run branch (`/Users/tom/cmptr/bin/workflow`
 // ~743-781) plus `loadArgs` (~286-290): parse the full preserved flag set,
-// resolve the workflow, refuse a mutating workflow without --allow-mutating,
-// reject an unknown backend, assemble the runtime object, log the one-line
-// "[workflow] backend=… concurrency=…" banner to STDERR, run, then print the
-// result to STDOUT (raw string, or pretty 2-space JSON for an object).
+// resolve a catalog name or explicit workflow file, refuse a mutating workflow
+// without --allow-mutating, reject an unknown backend, assemble the runtime
+// object, log the one-line "[workflow] backend=… concurrency=…" banner to
+// STDERR, run, then print the result to STDOUT (raw string, or pretty 2-space
+// JSON for an object).
 //
 // No top-level await: this returns a Promise the entrypoint awaits inside main().
 
@@ -14,9 +15,11 @@ import path from "node:path";
 import type { Catalog, Runtime } from "../../types.ts";
 import { parseOptions, type ParsedOptions } from "../args.ts";
 import { requireWorkflow } from "../../discovery/resolve.ts";
+import { workflowFilePath } from "../../discovery/target.ts";
 import { BACKENDS } from "../../backends/index.ts";
 import { loadResume } from "../../journal/resume.ts";
 import { newJournalPath, lastJournalPath } from "../../journal/store.ts";
+import { parseWorkflow } from "../../loader/meta.ts";
 import { WorkflowRunner } from "../../runtime/runner.ts";
 import { resolveConfig } from "../../config/config.ts";
 
@@ -46,7 +49,9 @@ export async function run(workflows: Catalog, cwd: string, args: string[]): Prom
     schemaRetries: "number", journal: "string", resume: "string",
     claudeBin: "string", claudeArg: "array", codexBin: "string", codexArg: "array", sandbox: "string",
   });
-  const workflow = requireWorkflow(workflows, opts._[0] as string);
+  const target = opts._[0] as string;
+  const file = workflowFilePath(target);
+  const workflow = file ? parseWorkflow(file, "scriptPath") : requireWorkflow(workflows, target);
   if (workflow.mutating && !opts.allowMutating) {
     throw new Error(`Refusing to run mutating workflow '${workflow.name}' without --allow-mutating.`);
   }
