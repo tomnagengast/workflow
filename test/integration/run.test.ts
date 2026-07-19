@@ -7,7 +7,7 @@
 // nested workflow(), budget accounting, and the stdout/stderr split.
 
 import { describe, expect, it } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -188,6 +188,129 @@ describe("model routing", () => {
           expect(args).not.toContain(testCase.model);
         }
       }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("routes an explicitly selected gate reviewer and keeps selected-backend model settings", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "workflow-reviewer-routing-"));
+    try {
+      const claudeCapture = path.join(dir, "claude.jsonl");
+      const codexCapture = path.join(dir, "codex.jsonl");
+      const { code, stdout } = await runCli(
+        [
+          "--cwd", RUN_HOME, "run", "reviewer-routing",
+          "--backend", "codex", "--model", "gpt-5.6-sol",
+          "--claude-bin", FAKE_CLAUDE, "--codex-bin", FAKE_CODEX,
+        ],
+        {
+          WORKFLOW_TEST_CLAUDE_ARGS: claudeCapture,
+          WORKFLOW_TEST_CODEX_ARGS: codexCapture,
+        },
+      );
+      expect(code).toBe(0);
+      expect(JSON.parse(stdout)).toEqual({
+        codex: expect.objectContaining({ approved: true }),
+        claude: expect.objectContaining({ approved: true }),
+      });
+      const codex = capturedArgs(codexCapture)[0]!;
+      const claude = capturedArgs(claudeCapture)[0]!;
+      expect(codex).toContain("--model");
+      expect(codex).toContain("gpt-5.6-sol");
+      expect(claude).not.toContain("--model");
+      expect(claude).not.toContain("gpt-5.6-sol");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("human review", () => {
+  it("suspends with a durable gate request and resumes from an appended human result", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "workflow-human-review-"));
+    const journal = path.join(dir, "journal.jsonl");
+    try {
+      const first = await runCli([
+        "--cwd", RUN_HOME, "run", "human-review", "--journal", journal,
+      ]);
+      expect(first.code).toBe(75);
+      expect(first.stdout).toBe("");
+      expect(first.stderr).toContain("suspended for human review");
+
+      const suspended = readFileSync(journal, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+      expect(suspended.map((event) => event.type)).toEqual([
+        "runtime.started",
+        "phase.started",
+        "step.started",
+        "runtime.suspended",
+      ]);
+      expect(suspended[2]).toEqual(expect.objectContaining({
+        backend: "human",
+        kind: "gate",
+        message: "Should this workflow continue?",
+      }));
+      expect(suspended[2].schema).toBeUndefined();
+      expect(suspended[3]).toEqual(expect.objectContaining({
+        stepId: suspended[2].stepId,
+        key: suspended[2].key,
+        backend: "human",
+      }));
+
+      appendFileSync(journal, JSON.stringify({
+        sequence: 5,
+        at: "2026-07-19T12:00:00.000Z",
+        type: "step.completed",
+        workflow: "human-review",
+        phase: "Review",
+        stepId: suspended[2].stepId,
+        key: suspended[2].key,
+        agentId: suspended[2].agentId,
+        backend: "human",
+        kind: "gate",
+        result: "Reviewed by a human.",
+      }) + "\n");
+
+      const resumed = await runCli([
+        "--cwd", RUN_HOME, "run", "human-review",
+        "--journal", journal, "--resume", journal,
+      ]);
+      expect(resumed.code).toBe(0);
+      expect(resumed.stdout.trim()).toBe("Reviewed by a human.");
+      const complete = readFileSync(journal, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+      expect(complete.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(complete.slice(5).map((event) => event.type)).toEqual([
+        "runtime.resumed",
+        "phase.started",
+        "step.cached",
+        "runtime.completed",
+      ]);
+      expect(complete[7]).toEqual(expect.objectContaining({
+        backend: "human",
+        result: "Reviewed by a human.",
+      }));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("finishes active parallel agent calls before recording suspension", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "workflow-human-parallel-"));
+    const journal = path.join(dir, "journal.jsonl");
+    try {
+      const result = await runCli([
+        "--cwd", RUN_HOME, "run", "human-parallel",
+        "--backend", "claude", "--claude-bin", FAKE_CLAUDE,
+        "--journal", journal,
+      ]);
+      expect(result.code).toBe(75);
+      const events = readFileSync(journal, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+      expect(events.at(-1)?.type).toBe("runtime.suspended");
+      expect(events.some((event) =>
+        event.type === "step.completed" && event.backend === "claude"
+      )).toBe(true);
+      expect(events.findIndex((event) => event.type === "step.completed"))
+        .toBeLessThan(events.findIndex((event) => event.type === "runtime.suspended"));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

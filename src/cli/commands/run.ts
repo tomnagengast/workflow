@@ -18,9 +18,11 @@ import { loadResume } from "../../journal/resume.ts";
 import { newJournalPath, lastJournalPath } from "../../journal/store.ts";
 import { parseWorkflow } from "../../loader/meta.ts";
 import { WorkflowRunner } from "../../runtime/runner.ts";
+import { HumanGateSuspended } from "../../runtime/gates.ts";
 import { resolveConfig } from "../../config/config.ts";
 
 const DEFAULT_SCHEMA_RETRIES = 2;
+export const HUMAN_GATE_EXIT_CODE = 75;
 
 /** Resolve a workflow's `--args JSON|@file` into a value. */
 function loadArgs(raw: string | undefined): unknown {
@@ -86,7 +88,14 @@ export async function run(workflows: Catalog, cwd: string, args: string[]): Prom
   };
   console.error(`[workflow] backend=${backend} concurrency=${runtime.concurrency}${runtime.budget ? ` budget=${runtime.budget}` : ""}`);
   const runner = new WorkflowRunner({ cwd, workflows, runtime });
-  const result = await runner.run(workflow, loadArgs(opts.args as string | undefined));
+  let result: unknown;
+  try {
+    result = await runner.run(workflow, loadArgs(opts.args as string | undefined));
+  } catch (error) {
+    if (!(error instanceof HumanGateSuspended)) throw error;
+    console.error(`[workflow] suspended for human review; resume with --resume ${runtime.journalPath}`);
+    return HUMAN_GATE_EXIT_CODE;
+  }
   if (typeof result === "string") console.log(result);
   else console.log(JSON.stringify(result, null, 2));
   return 0;

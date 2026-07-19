@@ -71,6 +71,26 @@ describe("semantic journal", () => {
     }
   });
 
+  it("continues sequence numbers when appending to an existing journal", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "wf-journal-"));
+    const file = path.join(dir, "j.jsonl");
+    try {
+      const first = new Journal(file);
+      first.write(started);
+      first.write(completed);
+      const continued = new Journal(file);
+      expect(continued.continued).toBe(true);
+      expect(continued.write({
+        type: "runtime.resumed",
+        workflow: "review",
+      }).sequence).toBe(3);
+      const events = readFileSync(file, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+      expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("accepts a null path as an observation-only sink", () => {
     const journal = new Journal(null);
     expect(journal.write(started).sequence).toBe(1);

@@ -39,9 +39,11 @@ Every key is optional and maps 1:1 to a `run` flag:
 `claude_bin` / `codex_bin` also accept the camelCase spellings `claudeBin` /
 `codexBin`. Unknown keys are ignored.
 
-`model` applies only to the selected `backend`. A cross-model `gate()` runs on
-the opposite backend with that backend's default model, so provider-specific
-model names never cross engines.
+`model` applies only to the selected `backend`. A default
+`gate(prompt, { reviewer: "agent" })` runs on the opposite backend with that
+backend's default model, so provider-specific model names never cross engines.
+An explicit `reviewer: "codex"` or `"claude"` selects that backend. It receives
+the configured model only when it is also the selected run backend.
 
 ### Example
 

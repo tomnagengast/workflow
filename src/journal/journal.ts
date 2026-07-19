@@ -1,7 +1,8 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 
 export const JOURNAL_EVENT_TYPES = [
   "runtime.started",
+  "runtime.resumed",
   "phase.started",
   "log",
   "diagnostic",
@@ -9,6 +10,7 @@ export const JOURNAL_EVENT_TYPES = [
   "step.cached",
   "step.completed",
   "step.failed",
+  "runtime.suspended",
   "runtime.completed",
   "runtime.failed",
 ] as const;
@@ -29,6 +31,7 @@ export interface JournalEvent {
   backend?: string;
   kind?: string;
   message?: string;
+  schema?: unknown;
   result?: unknown;
   error?: string;
   tokens?: number;
@@ -45,7 +48,22 @@ export class Journal {
   constructor(
     private readonly journalPath: string | null,
     private readonly now: () => Date = () => new Date(),
-  ) {}
+  ) {
+    if (journalPath && existsSync(journalPath)) {
+      const lines = readFileSync(journalPath, "utf8").split("\n").filter(Boolean);
+      for (const line of lines) {
+        const event = JSON.parse(line) as { sequence?: unknown };
+        if (!Number.isInteger(event.sequence) || Number(event.sequence) <= this.sequence) {
+          throw new Error(`Journal has invalid sequence at ${journalPath}`);
+        }
+        this.sequence = Number(event.sequence);
+      }
+    }
+  }
+
+  get continued(): boolean {
+    return this.sequence > 0;
+  }
 
   write(input: JournalEventInput): JournalEvent {
     const event: JournalEvent = {

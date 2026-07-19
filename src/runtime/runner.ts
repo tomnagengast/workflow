@@ -5,7 +5,7 @@
 //   - shared Semaphore across ALL agent()/gate() calls (FIFO).
 //   - budget is a hard ceiling: an exhausted dispatch THROWS BudgetError (not
 //     null); a dead subagent (after retries) returns null (callers .filter(Boolean)).
-//   - gate() ALWAYS injected (top-level AND nested); runs on the OPPOSITE backend.
+//   - gate() ALWAYS injected (top-level AND nested); defaults to the OPPOSITE backend.
 //   - the configured model belongs to the selected backend; opposite-backend
 //     gates use that backend's default model.
 //   - parallel(): barrier; a thrown thunk -> null (BudgetError re-thrown).
@@ -33,6 +33,12 @@ import { Semaphore } from "./concurrency.ts";
 import { BudgetError, makeBudget } from "./budget.ts";
 import { buildSandboxBag, runInSandbox } from "./sandbox.ts";
 import { buildAgentPrompt, buildGatePrompt, GATE_SCHEMA, opposite } from "./prompts.ts";
+import {
+  buildHumanGateIdentity,
+  buildReviewerGatePrompt,
+  gateReviewer,
+  HumanGateSuspended,
+} from "./gates.ts";
 import { Journal, type JournalEventInput } from "../journal/journal.ts";
 
 export class WorkflowRunner {
@@ -45,6 +51,8 @@ export class WorkflowRunner {
   cache: Map<string, unknown>;
   journalStream: Journal;
   nextStepId: number;
+  inFlight: Set<Promise<unknown>>;
+  pendingHumanGate: HumanGateSuspended | null;
 
   constructor({ cwd, workflows, runtime }: { cwd: string; workflows: Catalog; runtime: Runtime }) {
     this.cwd = cwd;
@@ -56,6 +64,8 @@ export class WorkflowRunner {
     this.cache = runtime.resumeCache || new Map();
     this.journalStream = new Journal(runtime.journalPath);
     this.nextStepId = 0;
+    this.inFlight = new Set();
+    this.pendingHumanGate = null;
   }
 
   journal(event: JournalEventInput): void {
@@ -100,7 +110,7 @@ export class WorkflowRunner {
 
   async run(workflow: WorkflowRow, argsValue: unknown): Promise<unknown> {
     this.journal({
-      type: "runtime.started",
+      type: this.journalStream.continued ? "runtime.resumed" : "runtime.started",
       workflow: workflow.name,
       backend: this.runtime.backend,
       concurrency: this.runtime.concurrency,
@@ -133,6 +143,23 @@ export class WorkflowRunner {
       });
       return result;
     } catch (error) {
+      if (error instanceof HumanGateSuspended) {
+        await Promise.allSettled(this.inFlight);
+        this.journal({
+          type: "runtime.suspended",
+          workflow: error.request.workflow,
+          phase: error.request.phase,
+          stepId: error.request.stepId,
+          key: error.request.key,
+          agentId: error.request.agentId,
+          backend: "human",
+          kind: "gate",
+          message: error.request.prompt,
+          schema: error.request.schema,
+          tokens: this.spent,
+        });
+        throw error;
+      }
       this.journal({
         type: "runtime.failed",
         workflow: workflow.name,
@@ -230,16 +257,70 @@ export class WorkflowRunner {
   async agent(workflow: WorkflowRow, prompt: string, opts: Record<string, unknown> = {}): Promise<unknown> {
     const phaseTitle = (opts.phase as string) || this.phaseTitle;
     const framed = buildAgentPrompt({ workflow, phaseTitle, label: (opts.label as string) || "agent", prompt, schema: opts.schema });
-    return this._dispatch(workflow, this.runtime.backend, framed, opts, "agent");
+    return this.track(this._dispatch(workflow, this.runtime.backend, framed, opts, "agent"));
   }
 
-  // cross-model gate: always runs on the OPPOSITE backend from the orchestrator (claude<->codex)
+  // Gates default to the opposite backend. A workflow may pin a backend or
+  // suspend for a durable human response.
   async gate(workflow: WorkflowRow, prompt: string, opts: Record<string, unknown> = {}): Promise<unknown> {
-    const backendName = opposite(this.runtime.backend);
-    const schema = opts.schema || GATE_SCHEMA;
+    const reviewer = gateReviewer(opts.reviewer);
+    const schema = reviewer === "human" ? opts.schema : (opts.schema || GATE_SCHEMA);
     const phaseTitle = (opts.phase as string) || this.phaseTitle;
-    const framed = buildGatePrompt({ workflow, backendName, phaseTitle, prompt, schema });
-    return this._dispatch(workflow, backendName, framed, { ...opts, schema }, "gate");
+    if (reviewer === "human") {
+      return this.humanGate(workflow, prompt, { ...opts, schema }, phaseTitle);
+    }
+    const backendName = reviewer === "agent" ? opposite(this.runtime.backend) : reviewer;
+    const framed = reviewer === "agent"
+      ? buildGatePrompt({ workflow, backendName, phaseTitle, prompt, schema })
+      : buildReviewerGatePrompt({ workflow, backendName: reviewer, phaseTitle, prompt, schema });
+    return this.track(this._dispatch(workflow, backendName, framed, { ...opts, schema }, "gate"));
+  }
+
+  async humanGate(
+    workflow: WorkflowRow,
+    prompt: string,
+    opts: Record<string, unknown>,
+    phaseTitle: string,
+  ): Promise<unknown> {
+    if (this.pendingHumanGate) throw this.pendingHumanGate;
+    const label = (opts.label as string) || "gate";
+    const schema = opts.schema;
+    const identity = buildHumanGateIdentity({ workflow, phaseTitle, prompt, schema });
+    const key = agentKey(identity, opts);
+    const stepId = ++this.nextStepId;
+    if (this.cache.has(key)) {
+      const result = this.cache.get(key);
+      this.journal({
+        type: "step.cached", workflow: workflow.name, phase: phaseTitle, stepId,
+        key, agentId: label, backend: "human", kind: "gate", message: prompt, schema, result,
+      });
+      console.error(`[workflow:${workflow.name}] gate cached [human]: ${phaseTitle ? `${phaseTitle}:` : ""}${label}`);
+      return result;
+    }
+    this.journal({
+      type: "step.started", workflow: workflow.name, phase: phaseTitle, stepId,
+      key, agentId: label, backend: "human", kind: "gate", message: prompt, schema,
+    });
+    const suspended = new HumanGateSuspended({
+      workflow: workflow.name,
+      phase: phaseTitle,
+      stepId,
+      key,
+      agentId: label,
+      prompt,
+      schema,
+    });
+    this.pendingHumanGate = suspended;
+    throw suspended;
+  }
+
+  async track(promise: Promise<unknown>): Promise<unknown> {
+    this.inFlight.add(promise);
+    try {
+      return await promise;
+    } finally {
+      this.inFlight.delete(promise);
+    }
   }
 
   // barrier: await all; a thrown thunk resolves to null; the call never rejects.
@@ -248,7 +329,7 @@ export class WorkflowRunner {
       throw new Error("parallel() expects an array of functions");
     }
     return Promise.all((thunks as Array<() => unknown>).map((t) => Promise.resolve().then(t).catch((e) => {
-      if (e instanceof BudgetError) throw e;
+      if (e instanceof BudgetError || e instanceof HumanGateSuspended) throw e;
       return null;
     })));
   }
@@ -265,7 +346,7 @@ export class WorkflowRunner {
         try {
           prev = await (stages[s] as (prev: unknown, item: unknown, index: number) => unknown)(prev, item, index);
         } catch (e) {
-          if (e instanceof BudgetError) throw e;
+          if (e instanceof BudgetError || e instanceof HumanGateSuspended) throw e;
           return null;
         }
       }
@@ -304,6 +385,7 @@ export class WorkflowRunner {
       });
       return result;
     } catch (error) {
+      if (error instanceof HumanGateSuspended) throw error;
       this.journal({
         type: "step.failed", workflow: workflow.name, phase, stepId,
         agentId: workflow.name, kind: "workflow",
