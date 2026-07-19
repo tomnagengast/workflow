@@ -8,6 +8,8 @@ Claude Code's "dynamic workflows" are JavaScript scripts in `~/.claude/workflows
 (and project `.claude/workflows`) that orchestrate fan-out subagents, gates, and
 pipelines. `workflow` discovers, inspects, and runs those same scripts as a
 standalone CLI, dispatching to real `claude` or `codex` backends.
+Gates can use the opposite agent, pin either backend, or suspend for a durable
+human response supplied by a coordinator.
 
 ```
 $ workflow list

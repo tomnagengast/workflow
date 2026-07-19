@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `gate(prompt, { reviewer })` now accepts `agent`, `codex`, `claude`, or
+  `human`. The default `agent` route keeps the existing opposite-backend
+  review, while an explicit backend pins the reviewer.
+- Human gates record `runtime.suspended` and exit with status 75. Appending the
+  matching `step.completed` result to the journal and rerunning with that file
+  as both `--journal` and `--resume` continues the same ordered stream with
+  `runtime.resumed`.
+
 ## [0.0.5] - 2026-07-19
 
 ### Changed
