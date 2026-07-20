@@ -7,7 +7,17 @@
 // nested workflow(), budget accounting, and the stdout/stderr split.
 
 import { describe, expect, it } from "bun:test";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  appendFileSync,
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -325,5 +335,278 @@ describe("budget hard ceiling", () => {
     const { code, stderr } = await runCli([...baseArgs, "--budget", "1"]);
     expect(code).toBe(1);
     expect(stderr).toContain("token budget exhausted");
+  });
+});
+
+describe("deterministic host actions", () => {
+  it("runs top-level and nested actions in journal order and resumes without repeating them", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "workflow-actions-"));
+    const root = path.join(dir, "root.js");
+    const nested = path.join(dir, "nested.js");
+    const journal = path.join(dir, "journal.jsonl");
+    const mutations = path.join(dir, "mutations.txt");
+    const actionScript = `
+import fs from "node:fs";
+fs.appendFileSync(process.argv.at(-1), "x");
+process.stdout.write(process.cwd());
+`;
+    try {
+      writeFileSync(nested, `export const meta = {
+  name: "nested-action",
+  description: "Exercise a nested deterministic action.",
+  phases: ["Nested"],
+  mutating: false,
+};
+phase("Nested");
+return action({
+  executable: ${JSON.stringify(process.execPath)},
+  arguments: ["-e", ${JSON.stringify(actionScript)}, "--", ${JSON.stringify(mutations)}],
+  timeoutMs: 5000,
+});
+`);
+      writeFileSync(root, `export const meta = {
+  name: "root-action",
+  description: "Exercise deterministic actions.",
+  phases: ["Root"],
+  mutating: false,
+};
+phase("Root");
+const top = await action({
+  executable: ${JSON.stringify(process.execPath)},
+  arguments: ["-e", ${JSON.stringify(actionScript)}, "--", ${JSON.stringify(mutations)}],
+  stdin: "not journaled",
+  timeoutMs: 5000,
+});
+const child = await workflow({ scriptPath: ${JSON.stringify(nested)} });
+return { top, child };
+`);
+
+      const first = await runCli([
+        "--cwd", dir, "run", root, "--journal", journal,
+      ]);
+      expect(first.code).toBe(0);
+      expect(readFileSync(mutations, "utf8")).toBe("xx");
+      const firstResult = JSON.parse(first.stdout);
+      expect(firstResult.top).toEqual(expect.objectContaining({
+        status: 0,
+        stdout: realpathSync(dir),
+        timedOut: false,
+        cancelled: false,
+      }));
+      expect(firstResult.child).toEqual(expect.objectContaining({
+        status: 0,
+        stdout: realpathSync(dir),
+      }));
+
+      const firstEvents = readFileSync(journal, "utf8")
+        .trim().split("\n").map((line) => JSON.parse(line));
+      expect(firstEvents.map((event) => event.sequence)).toEqual(
+        Array.from({ length: firstEvents.length }, (_, index) => index + 1),
+      );
+      expect(firstEvents.filter((event) => event.kind === "action").map((event) => event.type))
+        .toEqual(["step.started", "step.completed", "step.started", "step.completed"]);
+      expect(firstEvents.filter((event) => event.kind === "action").every(
+        (event) => event.backend === "host",
+      )).toBe(true);
+      expect(firstEvents.find((event) => event.kind === "action")?.message)
+        .not.toContain("not journaled");
+
+      const resumed = await runCli([
+        "--cwd", dir, "run", root, "--journal", journal, "--resume", journal,
+      ]);
+      expect(resumed.code).toBe(0);
+      expect(readFileSync(mutations, "utf8")).toBe("xx");
+      expect(JSON.parse(resumed.stdout)).toEqual(firstResult);
+      const allEvents = readFileSync(journal, "utf8")
+        .trim().split("\n").map((line) => JSON.parse(line));
+      expect(allEvents.filter((event) => event.kind === "action" && event.type === "step.cached"))
+        .toHaveLength(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("journals a typed action failure and fails the run", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "workflow-action-failure-"));
+    const source = path.join(dir, "failure.js");
+    const journal = path.join(dir, "journal.jsonl");
+    try {
+      writeFileSync(source, `export const meta = {
+  name: "action-failure",
+  description: "Exercise a nonzero action.",
+  phases: ["Run"],
+  mutating: false,
+};
+phase("Run");
+return action({
+  executable: ${JSON.stringify(process.execPath)},
+  arguments: ["-e", "process.stderr.write('action detail'); process.exit(7)"],
+  timeoutMs: 5000,
+});
+`);
+      const result = await runCli([
+        "--cwd", dir, "run", source, "--journal", journal,
+      ]);
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain("action exited 7");
+      const events = readFileSync(journal, "utf8")
+        .trim().split("\n").map((line) => JSON.parse(line));
+      expect(events.map((event) => event.type)).toEqual([
+        "runtime.started",
+        "phase.started",
+        "step.started",
+        "step.failed",
+        "runtime.failed",
+      ]);
+      expect(events[3]).toEqual(expect.objectContaining({
+        kind: "action",
+        backend: "host",
+        errorCode: "action-nonzero-exit",
+        result: expect.objectContaining({ status: 7, stderr: "action detail" }),
+      }));
+      expect(events[4].errorCode).toBe("action-nonzero-exit");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("drains concurrent steps before writing terminal failure", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "workflow-action-drain-"));
+    const source = path.join(dir, "parallel-failure.js");
+    const journal = path.join(dir, "journal.jsonl");
+    try {
+      writeFileSync(source, `export const meta = {
+  name: "parallel-action-failure",
+  description: "Keep the terminal event last after one concurrent action fails.",
+  phases: ["Run"],
+  mutating: false,
+};
+phase("Run");
+return parallel([
+  () => action({
+    executable: ${JSON.stringify(process.execPath)},
+    arguments: ["-e", "setTimeout(() => process.exit(7), 10)"],
+    timeoutMs: 5000,
+  }),
+  () => action({
+    executable: ${JSON.stringify(process.execPath)},
+    arguments: ["-e", "setTimeout(() => process.stdout.write('finished'), 100)"],
+    timeoutMs: 5000,
+  }),
+]);
+`);
+      const result = await runCli([
+        "--cwd", dir, "run", source, "--journal", journal,
+      ]);
+      expect(result.code).toBe(1);
+      const events = readFileSync(journal, "utf8")
+        .trim().split("\n").map((line) => JSON.parse(line));
+      expect(events.at(-1)?.type).toBe("runtime.failed");
+      expect(events.filter((event) =>
+        event.kind === "action" &&
+        (event.type === "step.completed" || event.type === "step.failed")
+      )).toHaveLength(2);
+      expect(events.findIndex((event) =>
+        event.kind === "action" && event.type === "step.completed"
+      )).toBeLessThan(events.length - 1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("typed backend failures", () => {
+  it("keeps stderr head and tail and fails instead of returning null", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "workflow-backend-failure-"));
+    const bin = path.join(dir, "failing-codex.mjs");
+    const journal = path.join(dir, "journal.jsonl");
+    try {
+      writeFileSync(bin, `#!/usr/bin/env node
+process.stderr.write("QUOTA-HEAD\\n" + "x".repeat(40 * 1024) + "\\nQUOTA-TAIL");
+process.exit(9);
+`);
+      chmodSync(bin, 0o755);
+      const result = await runCli([
+        "--cwd", RUN_HOME, "run", "mutator",
+        "--backend", "codex", "--codex-bin", bin,
+        "--allow-mutating", "--journal", journal,
+      ]);
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain("QUOTA-HEAD");
+      expect(result.stderr).toContain("QUOTA-TAIL");
+      const events = readFileSync(journal, "utf8")
+        .trim().split("\n").map((line) => JSON.parse(line));
+      const failed = events.find((event) => event.type === "step.failed");
+      expect(failed).toEqual(expect.objectContaining({
+        kind: "agent",
+        errorCode: "backend-failed",
+      }));
+      expect(failed.error).toContain("QUOTA-HEAD");
+      expect(failed.error).toContain("QUOTA-TAIL");
+      expect(events.at(-1)).toEqual(expect.objectContaining({
+        type: "runtime.failed",
+        errorCode: "backend-failed",
+      }));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a valid null result successful and resume-cacheable", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "workflow-null-result-"));
+    const bin = path.join(dir, "null-codex.mjs");
+    const source = path.join(dir, "null-result.js");
+    const journal = path.join(dir, "journal.jsonl");
+    const calls = path.join(dir, "calls.txt");
+    try {
+      writeFileSync(bin, `#!/usr/bin/env node
+import fs from "node:fs";
+const argv = process.argv.slice(2);
+const output = argv[argv.indexOf("--output-last-message") + 1];
+fs.appendFileSync(${JSON.stringify(calls)}, "x");
+fs.writeFileSync(output, "null");
+`);
+      chmodSync(bin, 0o755);
+      writeFileSync(source, `export const meta = {
+  name: "null-result",
+  description: "Return a valid null agent result.",
+  phases: ["Run"],
+  mutating: false,
+};
+phase("Run");
+return agent("Return null.", { schema: { type: "null" } });
+`);
+
+      const first = await runCli([
+        "--cwd", dir, "run", source,
+        "--backend", "codex", "--codex-bin", bin,
+        "--journal", journal,
+      ]);
+      expect(first.code).toBe(0);
+      expect(first.stdout).toBe("null\n");
+      expect(readFileSync(calls, "utf8")).toBe("x");
+      const completed = readFileSync(journal, "utf8")
+        .trim().split("\n").map((line) => JSON.parse(line))
+        .find((event) => event.type === "step.completed");
+      expect(completed.result).toBeNull();
+
+      const resumed = await runCli([
+        "--cwd", dir, "run", source,
+        "--backend", "codex", "--codex-bin", bin,
+        "--journal", journal, "--resume", journal,
+      ]);
+      expect(resumed.code).toBe(0);
+      expect(resumed.stdout).toBe("null\n");
+      expect(readFileSync(calls, "utf8")).toBe("x");
+      const events = readFileSync(journal, "utf8")
+        .trim().split("\n").map((line) => JSON.parse(line));
+      expect(events.some((event) =>
+        event.type === "step.cached" && event.result === null
+      )).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

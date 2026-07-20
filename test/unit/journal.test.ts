@@ -98,7 +98,7 @@ describe("semantic journal", () => {
 });
 
 describe("journal resume", () => {
-  it("replays successful agent results but not failures or nested workflows", () => {
+  it("replays successful step results, including null, but not failures or nested workflows", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "wf-journal-"));
     const file = path.join(dir, "j.jsonl");
     try {
@@ -113,9 +113,19 @@ describe("journal resume", () => {
         key: "nested",
         result: "done",
       });
+      journal.write({
+        type: "step.completed",
+        workflow: "review",
+        kind: "agent",
+        key: "v2:null-result",
+        result: null,
+      });
 
       const cache = loadResume(file);
-      expect([...cache]).toEqual([["v2:abc123", { note: "ok", n: 7 }]]);
+      expect([...cache]).toEqual([
+        ["v2:abc123", { note: "ok", n: 7 }],
+        ["v2:null-result", null],
+      ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

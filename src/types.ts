@@ -52,6 +52,7 @@ export interface Runtime {
   noValidate: boolean;
   verbose: boolean;
   vmTimeoutMs: number;
+  signal?: AbortSignal;
 }
 
 /** A backend's return envelope: the agent's value (text or schema-parsed object)

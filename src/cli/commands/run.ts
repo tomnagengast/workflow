@@ -62,6 +62,7 @@ export async function run(workflows: Catalog, cwd: string, args: string[]): Prom
   const concurrency = opts.concurrency as number;
   const budget = opts.budget as number;
   const schemaRetries = opts.schemaRetries as number;
+  const controller = new AbortController();
   const runtime: Runtime = {
     cwd,
     backend,
@@ -85,18 +86,31 @@ export async function run(workflows: Catalog, cwd: string, args: string[]): Prom
     noValidate: Boolean(opts.noValidate),
     verbose: Boolean(opts.verbose),
     vmTimeoutMs: 24 * 60 * 60 * 1000,
+    signal: controller.signal,
   };
   console.error(`[workflow] backend=${backend} concurrency=${runtime.concurrency}${runtime.budget ? ` budget=${runtime.budget}` : ""}`);
   const runner = new WorkflowRunner({ cwd, workflows, runtime });
-  let result: unknown;
+  const cancel = (signal: NodeJS.Signals) => {
+    if (!controller.signal.aborted) controller.abort(new Error(`workflow cancelled by ${signal}`));
+  };
+  const onInterrupt = () => cancel("SIGINT");
+  const onTerminate = () => cancel("SIGTERM");
+  process.once("SIGINT", onInterrupt);
+  process.once("SIGTERM", onTerminate);
   try {
-    result = await runner.run(workflow, loadArgs(opts.args as string | undefined));
-  } catch (error) {
-    if (!(error instanceof HumanGateSuspended)) throw error;
-    console.error(`[workflow] suspended for human review; resume with --resume ${runtime.journalPath}`);
-    return HUMAN_GATE_EXIT_CODE;
+    let result: unknown;
+    try {
+      result = await runner.run(workflow, loadArgs(opts.args as string | undefined));
+    } catch (error) {
+      if (!(error instanceof HumanGateSuspended)) throw error;
+      console.error(`[workflow] suspended for human review; resume with --resume ${runtime.journalPath}`);
+      return HUMAN_GATE_EXIT_CODE;
+    }
+    if (typeof result === "string") console.log(result);
+    else console.log(JSON.stringify(result, null, 2));
+    return 0;
+  } finally {
+    process.removeListener("SIGINT", onInterrupt);
+    process.removeListener("SIGTERM", onTerminate);
   }
-  if (typeof result === "string") console.log(result);
-  else console.log(JSON.stringify(result, null, 2));
-  return 0;
 }
