@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-07-20
+
 ### Added
 
 - Added journaled `action({ executable, arguments, cwd?, stdin?, timeoutMs })`
