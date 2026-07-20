@@ -4,12 +4,14 @@
 
 > Status: pre-1.0 and in active development. Bun + TypeScript, shipped as a single binary.
 
-Claude Code's "dynamic workflows" are JavaScript scripts in `~/.claude/workflows`
-(and project `.claude/workflows`) that orchestrate fan-out subagents, gates, and
-pipelines. `workflow` discovers, inspects, and runs those same scripts as a
-standalone CLI, dispatching to real `claude` or `codex` backends.
-Gates can use the opposite agent, pin either backend, or suspend for a durable
-human response supplied by a coordinator.
+Claude Code's "dynamic workflows" are JavaScript scripts in
+`~/.claude/workflows` (and project `.claude/workflows`) that orchestrate fan-out
+subagents, gates, deterministic host actions, and pipelines. `workflow`
+discovers, inspects, and runs those same scripts as a standalone CLI,
+dispatching judgment work to real `claude` or `codex` backends and fixed
+external operations directly to an executable and argument array. Gates can use
+the opposite agent, pin either backend, or suspend for a durable human response
+supplied by a coordinator.
 
 ```
 $ workflow list

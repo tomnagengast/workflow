@@ -2,9 +2,9 @@
 // module centralizes:
 //   - `buildSandboxBag`: assemble the global object exposed to a workflow body
 //     (args, console, JSON, Math, Date — Math.random/Date present-but-parse-
-//     banned — budget, phase, log, agent, gate, parallel, pipeline, workflow,
-//     setTimeout, clearTimeout). `gate` is ALWAYS injected (top-level AND nested);
-//     the `typeof gate === 'function'` guard in scripts is defensive only.
+//     banned — budget, phase, log, agent, gate, action, parallel, pipeline,
+//     workflow, setTimeout, clearTimeout). `gate` and `action` are ALWAYS
+//     injected (top-level AND nested).
 //   - `runInSandbox`: createContext + runInContext with `{ filename, timeout }`.
 //
 // `node:vm` works under `bun build --compile --bytecode` (proven Phase 1). No top-
@@ -21,6 +21,7 @@ export interface SandboxHooks {
   log: (message: unknown) => void;
   agent: (prompt: string, opts?: Record<string, unknown>) => Promise<unknown>;
   gate: (prompt: string, opts?: Record<string, unknown>) => Promise<unknown>;
+  action: (spec: unknown) => Promise<unknown>;
   parallel: (thunks: unknown) => Promise<unknown>;
   pipeline: (items: unknown[], ...stages: unknown[]) => Promise<unknown>;
   workflow: (nameOrSpec: unknown, nestedArgs?: unknown) => Promise<unknown>;
@@ -39,6 +40,7 @@ export function buildSandboxBag(hooks: SandboxHooks): Record<string, unknown> {
     log: hooks.log,
     agent: hooks.agent,
     gate: hooks.gate,
+    action: hooks.action,
     parallel: hooks.parallel,
     pipeline: hooks.pipeline,
     workflow: hooks.workflow,

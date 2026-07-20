@@ -1,5 +1,5 @@
-// Journal resume replays successful agent and gate results. Runtime, workflow,
-// presentation, and failed events remain observations only.
+// Journal resume replays successful agent, gate, and action results. Runtime,
+// workflow, presentation, and failed events remain observations only.
 
 import { existsSync, readFileSync } from "node:fs";
 
@@ -14,7 +14,6 @@ export function loadResume(file: string | null): Map<string, unknown> {
       if (
         (event.type === "step.completed" || event.type === "step.cached") &&
         event.kind !== "workflow" &&
-        event.result !== null &&
         event.key
       ) {
         cache.set(event.key, event.result);

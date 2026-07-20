@@ -2,15 +2,18 @@
 //
 // Drives a workflow body in a vm sandbox against the agent backends. Key
 // contracts:
-//   - shared Semaphore across ALL agent()/gate() calls (FIFO).
-//   - budget is a hard ceiling: an exhausted dispatch THROWS BudgetError (not
-//     null); a dead subagent (after retries) returns null (callers .filter(Boolean)).
+//   - shared Semaphore across ALL agent()/gate()/action() calls (FIFO).
+//   - budget is a hard ceiling: an exhausted dispatch THROWS BudgetError.
+//   - backend, process, and host-action failures THROW WorkflowStepError; a
+//     valid backend result, including null, remains a successful result.
 //   - gate() ALWAYS injected (top-level AND nested); defaults to the OPPOSITE backend.
+//   - action() ALWAYS injected (top-level AND nested); executes one fixed
+//     executable+argv operation without an implicit shell.
 //   - the configured model belongs to the selected backend; opposite-backend
 //     gates use that backend's default model.
-//   - parallel(): barrier; a thrown thunk -> null (BudgetError re-thrown).
+//   - parallel(): barrier; a thrown thunk -> null (runtime failures re-thrown).
 //   - pipeline(): variadic per-item stages, no barrier; a thrown stage -> null
-//     for that item (BudgetError re-thrown).
+//     for that item (runtime failures re-thrown).
 //   - workflow(): nested dispatch, sharing this run's sem/budget/cache/journal.
 //   - cache: resume cache pre-seeded; a cache hit short-circuits dispatch.
 //   - journal: every semantic runtime observation is appended in one ordered
@@ -29,8 +32,16 @@ import { validateSource } from "../loader/validate.ts";
 import { requireWorkflow } from "../discovery/resolve.ts";
 import { BACKENDS } from "../backends/index.ts";
 import { agentKey } from "./agentKey.ts";
+import { actionIdentity, actionKey } from "./actionKey.ts";
 import { Semaphore } from "./concurrency.ts";
 import { BudgetError, makeBudget } from "./budget.ts";
+import { WorkflowStepError } from "./failures.ts";
+import {
+  normalizeHostActionSpec,
+  runHostAction,
+  type HostActionResult,
+  type NormalizedHostActionSpec,
+} from "./hostAction.ts";
 import { buildSandboxBag, runInSandbox } from "./sandbox.ts";
 import { buildAgentPrompt, buildGatePrompt, GATE_SCHEMA, opposite } from "./prompts.ts";
 import {
@@ -51,6 +62,7 @@ export class WorkflowRunner {
   cache: Map<string, unknown>;
   journalStream: Journal;
   nextStepId: number;
+  actionOccurrences: Map<string, number>;
   inFlight: Set<Promise<unknown>>;
   pendingHumanGate: HumanGateSuspended | null;
 
@@ -64,6 +76,7 @@ export class WorkflowRunner {
     this.cache = runtime.resumeCache || new Map();
     this.journalStream = new Journal(runtime.journalPath);
     this.nextStepId = 0;
+    this.actionOccurrences = new Map();
     this.inFlight = new Set();
     this.pendingHumanGate = null;
   }
@@ -129,6 +142,7 @@ export class WorkflowRunner {
         log: (message) => this.log(workflow, message),
         agent: (prompt, opts = {}) => this.agent(workflow, prompt, opts),
         gate: (prompt, opts = {}) => this.gate(workflow, prompt, opts),
+        action: (spec) => this.action(workflow, spec),
         parallel: (thunks) => this.parallel(thunks),
         pipeline: (items, ...stages) => this.pipeline(items, stages),
         workflow: (nameOrSpec, nestedArgs) => this.workflow(nameOrSpec, nestedArgs),
@@ -160,11 +174,13 @@ export class WorkflowRunner {
         });
         throw error;
       }
+      await Promise.allSettled(this.inFlight);
       this.journal({
         type: "runtime.failed",
         workflow: workflow.name,
         phase: this.phaseTitle,
         error: error instanceof Error ? error.message : String(error),
+        errorCode: error instanceof WorkflowStepError ? error.code : undefined,
         tokens: this.spent,
       });
       throw error;
@@ -212,12 +228,18 @@ export class WorkflowRunner {
     }
     if (!BACKENDS[backendName]) {
       const error = `backend '${backendName}' unavailable`;
+      const failure = new WorkflowStepError({
+        code: "backend-unavailable",
+        stepKind: kind as "agent" | "gate",
+        message: error,
+      });
       this.journal({
         type: "step.failed", workflow: workflow.name, phase: phaseTitle, stepId,
-        key, agentId: label, backend: backendName, kind, message: framedPrompt, error,
+        key, agentId: label, backend: backendName, kind, message: framedPrompt,
+        error, errorCode: failure.code,
       });
-      console.error(`[workflow:${workflow.name}] ${kind} FAILED (-> null): ${error}`);
-      return null;
+      console.error(`[workflow:${workflow.name}] ${kind} FAILED: ${error}`);
+      throw failure;
     }
 
     this.journal({
@@ -240,15 +262,22 @@ export class WorkflowRunner {
       console.error(`[workflow:${workflow.name}] ${kind} done [${backendName}]: ${phaseTitle ? `${phaseTitle}:` : ""}${label}`);
       return value;
     } catch (error) {
-      // returns null when a subagent dies after retries (callers .filter(Boolean))
-      const err = error as Error;
-      console.error(`[workflow:${workflow.name}] ${kind} FAILED (-> null): ${label}: ${err.message}`);
+      const detail = error instanceof Error ? error.message : String(error);
+      const failure = error instanceof WorkflowStepError
+        ? error
+        : new WorkflowStepError({
+          code: "backend-failed",
+          stepKind: kind as "agent" | "gate",
+          message: `${backendName} ${kind} failed: ${detail}`,
+          cause: error,
+        });
+      console.error(`[workflow:${workflow.name}] ${kind} FAILED: ${label}: ${failure.message}`);
       this.journal({
         type: "step.failed", workflow: workflow.name, phase: phaseTitle, stepId,
-        key, agentId: label, backend: backendName, kind, result: null,
-        error: String(err.message || err),
+        key, agentId: label, backend: backendName, kind,
+        error: failure.message, errorCode: failure.code,
       });
-      return null;
+      throw failure;
     } finally {
       this.sem.release();
     }
@@ -314,6 +343,132 @@ export class WorkflowRunner {
     throw suspended;
   }
 
+  async action(workflow: WorkflowRow, value: unknown): Promise<unknown> {
+    return this.track(this._action(workflow, value));
+  }
+
+  async _action(workflow: WorkflowRow, value: unknown): Promise<HostActionResult> {
+    const stepId = ++this.nextStepId;
+    const phase = this.phaseTitle;
+    let spec: NormalizedHostActionSpec;
+    try {
+      spec = normalizeHostActionSpec(value, this.cwd);
+    } catch (error) {
+      const failure = error instanceof WorkflowStepError
+        ? error
+        : new WorkflowStepError({
+          code: "action-invalid",
+          stepKind: "action",
+          message: error instanceof Error ? error.message : String(error),
+          cause: error,
+        });
+      this.journal({
+        type: "step.failed",
+        workflow: workflow.name,
+        phase,
+        stepId,
+        agentId: "action",
+        backend: "host",
+        kind: "action",
+        error: failure.message,
+        errorCode: failure.code,
+      });
+      throw failure;
+    }
+
+    const identity = actionIdentity({ workflowPath: workflow.path, spec });
+    const occurrence = (this.actionOccurrences.get(identity) ?? 0) + 1;
+    this.actionOccurrences.set(identity, occurrence);
+    const key = actionKey(identity, occurrence);
+    const agentId = spec.executable;
+    const message = JSON.stringify({
+      executable: spec.executable,
+      arguments: spec.arguments,
+      cwd: spec.cwd,
+      stdinBytes: spec.stdin === undefined ? 0 : Buffer.byteLength(spec.stdin),
+      timeoutMs: spec.timeoutMs,
+    });
+    if (this.cache.has(key)) {
+      const result = this.cache.get(key) as HostActionResult;
+      this.journal({
+        type: "step.cached",
+        workflow: workflow.name,
+        phase,
+        stepId,
+        key,
+        agentId,
+        backend: "host",
+        kind: "action",
+        message,
+        result,
+      });
+      console.error(`[workflow:${workflow.name}] action cached: ${phase ? `${phase}:` : ""}${agentId}`);
+      return result;
+    }
+
+    this.journal({
+      type: "step.started",
+      workflow: workflow.name,
+      phase,
+      stepId,
+      key,
+      agentId,
+      backend: "host",
+      kind: "action",
+      message,
+    });
+
+    let acquired = false;
+    try {
+      await this.sem.acquire(this.runtime.signal);
+      acquired = true;
+      console.error(`[workflow:${workflow.name}] action start [host]: ${phase ? `${phase}:` : ""}${agentId}`);
+      const result = await runHostAction(spec, this.runtime.signal);
+      this.cache.set(key, result);
+      this.journal({
+        type: "step.completed",
+        workflow: workflow.name,
+        phase,
+        stepId,
+        key,
+        agentId,
+        backend: "host",
+        kind: "action",
+        result,
+      });
+      console.error(`[workflow:${workflow.name}] action done [host]: ${phase ? `${phase}:` : ""}${agentId}`);
+      return result;
+    } catch (error) {
+      const failure = error instanceof WorkflowStepError
+        ? error
+        : new WorkflowStepError({
+          code: this.runtime.signal?.aborted ? "action-cancelled" : "action-launch-failed",
+          stepKind: "action",
+          message: this.runtime.signal?.aborted
+            ? `action cancelled: ${spec.executable}`
+            : `action failed: ${spec.executable}: ${error instanceof Error ? error.message : String(error)}`,
+          cause: error,
+        });
+      this.journal({
+        type: "step.failed",
+        workflow: workflow.name,
+        phase,
+        stepId,
+        key,
+        agentId,
+        backend: "host",
+        kind: "action",
+        result: failure.result,
+        error: failure.message,
+        errorCode: failure.code,
+      });
+      console.error(`[workflow:${workflow.name}] action FAILED: ${failure.message}`);
+      throw failure;
+    } finally {
+      if (acquired) this.sem.release();
+    }
+  }
+
   async track(promise: Promise<unknown>): Promise<unknown> {
     this.inFlight.add(promise);
     try {
@@ -323,13 +478,17 @@ export class WorkflowRunner {
     }
   }
 
-  // barrier: await all; a thrown thunk resolves to null; the call never rejects.
+  // barrier: generic user exceptions become null; runtime failures reject.
   async parallel(thunks: unknown): Promise<unknown> {
     if (!Array.isArray(thunks) || thunks.some((t) => typeof t !== "function")) {
       throw new Error("parallel() expects an array of functions");
     }
     return Promise.all((thunks as Array<() => unknown>).map((t) => Promise.resolve().then(t).catch((e) => {
-      if (e instanceof BudgetError || e instanceof HumanGateSuspended) throw e;
+      if (
+        e instanceof BudgetError ||
+        e instanceof HumanGateSuspended ||
+        e instanceof WorkflowStepError
+      ) throw e;
       return null;
     })));
   }
@@ -346,7 +505,11 @@ export class WorkflowRunner {
         try {
           prev = await (stages[s] as (prev: unknown, item: unknown, index: number) => unknown)(prev, item, index);
         } catch (e) {
-          if (e instanceof BudgetError || e instanceof HumanGateSuspended) throw e;
+          if (
+            e instanceof BudgetError ||
+            e instanceof HumanGateSuspended ||
+            e instanceof WorkflowStepError
+          ) throw e;
           return null;
         }
       }
@@ -408,6 +571,7 @@ export class WorkflowRunner {
       log: (message) => this.log(workflow, message),
       agent: (prompt, opts = {}) => this.agent(workflow, prompt, opts),
       gate: (prompt, opts = {}) => this.gate(workflow, prompt, opts),
+      action: (spec) => this.action(workflow, spec),
       parallel: (thunks) => this.parallel(thunks),
       pipeline: (items, ...stages) => this.pipeline(items, stages),
       workflow: (n, a) => this.workflow(n, a),

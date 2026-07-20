@@ -11,6 +11,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { BackendResult, Runtime } from "../types.ts";
+import { failureContext } from "../runtime/output.ts";
 import { spawnAsync } from "./spawn.ts";
 
 /** Map an engine-specific JSON.parse failure to the stable Node V8 message so
@@ -46,7 +47,11 @@ export async function codexBackend(prompt: string, schema: unknown, rt: Runtime)
   try {
     const child = await spawnAsync(rt.codexBin, args, { cwd: rt.cwd, verbose: rt.verbose });
     if (child.error) throw child.error;
-    if (child.status !== 0) throw new Error(`codex exec exited with ${child.status}: ${(child.stderr || "").slice(0, 400)}`);
+    if (child.status !== 0) {
+      throw new Error(
+        `codex exec exited with ${child.status}: ${failureContext(child.stderr, child.stdout)}`,
+      );
+    }
     const output = fs.readFileSync(resultFile, "utf8").trim();
     // codex enforces --output-schema, so tokens aren't surfaced here (budget is claude-accurate only).
     if (!schema) return { value: output, tokens: 0 };

@@ -3,13 +3,14 @@
 // extra --claude-arg). Parse the JSON envelope: `result` is the text, `usage.
 // output_tokens` the token count. With a schema, retry up to `schemaRetries + 1`
 // times, re-framing the prompt with a "did not match schema" nudge; without a
-// schema, one shot returning raw text. A non-zero exit becomes a retryable error;
-// a spawn error throws immediately.
+// schema, one shot returning raw text. Process and launch failures throw
+// immediately; only a schema mismatch is retried.
 //
 // No top-level await.
 
 import type { BackendResult, Runtime } from "../types.ts";
 import { tryParseJson, schemaOk } from "../schema/validate.ts";
+import { failureContext } from "../runtime/output.ts";
 import { spawnAsync } from "./spawn.ts";
 
 /** Run the claude backend. */
@@ -26,8 +27,9 @@ export async function claudeBackend(prompt: string, schema: unknown, rt: Runtime
     const child = await spawnAsync(rt.claudeBin, args, { cwd: rt.cwd, verbose: rt.verbose });
     if (child.error) throw child.error;
     if (child.status !== 0) {
-      lastErr = new Error(`claude exited ${child.status}: ${(child.stderr || "").slice(0, 400)}`);
-      continue;
+      throw new Error(
+        `claude exited ${child.status}: ${failureContext(child.stderr, child.stdout)}`,
+      );
     }
     let env: { result?: unknown; usage?: { output_tokens?: number } } | null;
     try { env = JSON.parse(child.stdout); } catch { env = null; }

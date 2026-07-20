@@ -10,7 +10,9 @@ touching.
 - **Product / behavior contract** — this repository is the sole contract.
   Snapshots and golden tests lock the agentKey hash, prompt builders,
   export-strip/async-IIFE transform, `parseOptions` parser, CLI output, and
-  complete semantic journal documented in [`../usage.md`](../usage.md).
+  complete semantic journal documented in [`../usage.md`](../usage.md). Host
+  actions use a separate versioned cache identity; do not change the frozen
+  agentKey contract when extending them.
 - **Build / runtime constraint** — the compiled binary is CJS
   (`bun build --compile --bytecode`), so there is no top-level await on the load
   path. Wrap async work in `async function main(){…}; main()`.

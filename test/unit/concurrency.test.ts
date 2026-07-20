@@ -38,6 +38,19 @@ describe("Semaphore", () => {
     const sem = new Semaphore(0);
     expect(sem.max).toBe(1);
   });
+
+  it("removes a cancelled waiter without consuming a slot", async () => {
+    const sem = new Semaphore(1);
+    await sem.acquire();
+    const controller = new AbortController();
+    const cancelled = sem.acquire(controller.signal);
+    const next = sem.acquire();
+    controller.abort(new Error("stop"));
+    await expect(cancelled).rejects.toThrow("stop");
+    sem.release();
+    await next;
+    expect(sem.active).toBe(1);
+  });
 });
 
 describe("defaultConcurrency", () => {

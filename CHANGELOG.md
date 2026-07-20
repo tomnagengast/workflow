@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Added journaled `action({ executable, arguments, cwd?, stdin?, timeoutMs })`
+  calls for bounded, cancellable deterministic host operations in top-level and
+  nested workflows.
+- Added typed `WorkflowStepError` failures with stable error codes for backend,
+  process, and host-action failures.
+
+### Changed
+
+- Backend and action output now retain bounded head and tail context. Nonzero
+  Claude processes fail immediately; only schema mismatch remains retryable.
+- Successful `null` results now remain distinct from failures and can be
+  replayed from the resume cache.
+
 ## [0.0.6] - 2026-07-19
 
 ### Added

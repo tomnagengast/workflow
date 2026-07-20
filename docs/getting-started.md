@@ -33,3 +33,17 @@ workflow --cwd /path/to/project run /path/to/workflow.js
 `run` dispatches to a real `claude` (default) or `codex` backend, so the relevant
 CLI must be installed and on your `PATH`. See [usage.md](usage.md) for the full
 option set.
+
+Workflow source can use `action()` for a fixed external read or authorized
+mutation that needs no model judgment:
+
+```js
+const status = await action({
+  executable: "/usr/bin/git",
+  arguments: ["status", "--short"],
+  timeoutMs: 10_000,
+})
+```
+
+`action()` never invokes an implicit shell. See [usage.md](usage.md) for its
+output bounds, failures, cancellation, journaling, and resume behavior.

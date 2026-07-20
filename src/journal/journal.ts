@@ -34,6 +34,7 @@ export interface JournalEvent {
   schema?: unknown;
   result?: unknown;
   error?: string;
+  errorCode?: string;
   tokens?: number;
   concurrency?: number;
   budget?: number | null;
